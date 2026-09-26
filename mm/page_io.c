@@ -25,7 +25,11 @@
 #include <linux/psi.h>
 #include <linux/uio.h>
 #include <linux/sched/task.h>
+#include <linux/kthread.h>
+#include <linux/freezer.h>
 #include <asm/pgtable.h>
+
+int sysctl_kcompressd = 1;
 
 static struct bio *get_swap_bio(gfp_t gfp_flags,
 				struct page *page, bio_end_io_t end_io)
@@ -200,6 +204,7 @@ bad_bmap:
 int swap_writepage(struct page *page, struct writeback_control *wbc)
 {
 	int ret = 0;
+	pg_data_t *pgdat = page_pgdat(page);
 
 	if (try_to_free_swap(page)) {
 		unlock_page(page);
@@ -211,9 +216,53 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 		end_page_writeback(page);
 		goto out;
 	}
+
+	if (sysctl_kcompressd && current_is_kswapd() && pgdat->kcompressd) {
+		get_page(page);
+		if (kfifo_in_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+					&pgdat->kcompress_lock) == 1) {
+			wake_up(&pgdat->kcompressd_wait);
+			goto out;
+		}
+		put_page(page);
+	}
 	ret = __swap_writepage(page, wbc, end_swap_bio_write);
 out:
 	return ret;
+}
+
+int kcompressd(void *p)
+{
+	pg_data_t *pgdat = p;
+	struct writeback_control wbc = {
+		.sync_mode = WB_SYNC_NONE,
+	};
+	struct page *page;
+
+	current->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
+	set_freezable();
+
+	while (!kthread_should_stop()) {
+		wait_event_freezable(pgdat->kcompressd_wait,
+				kthread_should_stop() ||
+				!kfifo_is_empty(&pgdat->kcompress_fifo));
+
+		while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+					  &pgdat->kcompress_lock) == 1) {
+			__swap_writepage(page, &wbc, end_swap_bio_write);
+			put_page(page);
+			cond_resched();
+		}
+	}
+
+	while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+				  &pgdat->kcompress_lock) == 1) {
+		__swap_writepage(page, &wbc, end_swap_bio_write);
+		put_page(page);
+		cond_resched();
+	}
+
+	return 0;
 }
 
 static inline void count_swpout_vm_event(struct page *page)
