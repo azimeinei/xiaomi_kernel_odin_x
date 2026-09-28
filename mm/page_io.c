@@ -18,7 +18,7 @@
 #include <linux/swap.h>
 #include <linux/kfifo.h>
 
-extern struct __kfifo kcompress_fifos[];
+extern struct __kfifo *kcompress_fifos;
 #define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/bio.h>
 #include <linux/swapops.h>
@@ -207,7 +207,7 @@ bad_bmap:
  */
 int swap_writepage(struct page *page, struct writeback_control *wbc)
 {
-	int ret = 0;
+	int ret = 0, ret2;
 	pg_data_t *pgdat = page_pgdat(page);
 
 	if (try_to_free_swap(page)) {
@@ -223,8 +223,11 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 
 	if (sysctl_kcompressd && current_is_kswapd() && pgdat->kcompressd) {
 		get_page(page);
-		if (kfifo_in_spinlocked(pgdat_fifo(pgdat), &page, 1,
-					&pgdat->kcompress_lock) == 1) {
+		unsigned long flags;
+		spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+		ret2 = __kfifo_in(pgdat_fifo(pgdat), &page, 1);
+		spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+		if (ret2 == 1) {
 			wake_up(&pgdat->kcompressd_wait);
 			goto out;
 		}
@@ -242,6 +245,7 @@ int kcompressd(void *p)
 		.sync_mode = WB_SYNC_NONE,
 	};
 	struct page *page;
+	unsigned long flags;
 
 	current->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
 	set_freezable();
@@ -249,18 +253,30 @@ int kcompressd(void *p)
 	while (!kthread_should_stop()) {
 		wait_event_freezable(pgdat->kcompressd_wait,
 				kthread_should_stop() ||
-				!kfifo_is_empty(pgdat_fifo(pgdat)));
+				pgdat_fifo(pgdat)->in == pgdat_fifo(pgdat)->out);
 
-		while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
-					  &pgdat->kcompress_lock) == 1) {
+		while (pgdat_fifo(pgdat)->in != pgdat_fifo(pgdat)->out) {
+			spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+			if (__kfifo_out(pgdat_fifo(pgdat), &page, 1) != 1) {
+				spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+				break;
+			}
+			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+
 			__swap_writepage(page, &wbc, end_swap_bio_write);
 			put_page(page);
 			cond_resched();
 		}
 	}
 
-	while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
-				  &pgdat->kcompress_lock) == 1) {
+	while (pgdat_fifo(pgdat)->in != pgdat_fifo(pgdat)->out) {
+		spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+		if (__kfifo_out(pgdat_fifo(pgdat), &page, 1) != 1) {
+			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+			break;
+		}
+		spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+
 		__swap_writepage(page, &wbc, end_swap_bio_write);
 		put_page(page);
 		cond_resched();
@@ -354,7 +370,7 @@ out:
 int swap_readpage(struct page *page, bool synchronous)
 {
 	struct bio *bio;
-	int ret = 0;
+	int ret = 0, ret2;
 	struct swap_info_struct *sis = page_swap_info(page);
 	blk_qc_t qc;
 	struct gendisk *disk;
