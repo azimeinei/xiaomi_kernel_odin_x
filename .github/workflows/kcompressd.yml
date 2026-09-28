@@ -12,7 +12,6 @@ on:
         default: arm64
 
 env:
-  CLANG_VER: "r416183b"
   BUILD_OUTPUT: out
 
 jobs:
@@ -35,31 +34,30 @@ jobs:
         uses: actions/cache@v3
         with:
           path: prebuilts
-          key: tc-clang-${{ env.CLANG_VER }}-gcc49-v3
+          key: tc-proton-20240107-v1
 
-      - name: Download clang (LineageOS mirror) + gcc
+      - name: Download proton-clang
         if: steps.cache_tc.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          mkdir -p prebuilts/clang/host/linux-x86 prebuilts/gcc/linux-x86/aarch64
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-${{ env.CLANG_VER }} prebuilts/clang/host/linux-x86/clang-${{ env.CLANG_VER }}
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          mkdir -p prebuilts
+          cd prebuilts
+          wget -q "https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz" -O proton.tar.gz
+          mkdir proton && tar -xf proton.tar.gz -C proton --strip-components=1 && rm proton.tar.gz
 
       - name: Build kernel
         run: |
           set -euo pipefail
-          export PATH="$PWD/prebuilts/clang/host/linux-x86/clang-${{ env.CLANG_VER }}/bin:$PWD/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:$PATH"
+          export PATH="$PWD/prebuilts/proton/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-android-
-          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           make O=$BUILD_OUTPUT ${{ github.event.inputs.target_defconfig }}
           make -j$(nproc) O=$BUILD_OUTPUT \
             ARCH=arm64 \
-            CC=clang CXX=clang++ LD=ld.lld \
+            CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             Image.gz
 
       - name: Upload Image.gz
