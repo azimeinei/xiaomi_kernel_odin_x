@@ -20,11 +20,6 @@
 #include <linux/gfp.h>
 #include <linux/kernel_stat.h>
 #include <linux/swap.h>
-#include <linux/kfifo.h>
-#include <linux/swap.h>
-
-struct __kfifo *kcompress_fifos;
-#define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/pagemap.h>
 #include <linux/init.h>
 #include <linux/highmem.h>
@@ -7201,21 +7196,6 @@ int kswapd_run(int nid)
 	if (pgdat->kswapd)
 		return 0;
 
-#ifdef CONFIG_SWAP
-	if ((pgdat_fifo(pgdat))->in == (pgdat_fifo(pgdat))->out) {
-		ret = __kfifo_alloc(pgdat_fifo(pgdat), KCOMPRESS_FIFO_SIZE,
-				  sizeof(struct page *), GFP_KERNEL);
-		if (!ret) {
-			pgdat->kcompressd = kthread_run(kcompressd, pgdat,
-							"kcompressd%d", nid);
-			if (IS_ERR(pgdat->kcompressd)) {
-				pgdat->kcompressd = NULL;
-				__kfifo_free(pgdat_fifo(pgdat));
-			}
-		}
-	}
-#endif
-
 	pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d:0", nid);
 	if (IS_ERR(pgdat->kswapd)) {
 		/* failure at boot is fatal */
@@ -7237,24 +7217,6 @@ int kswapd_run(int nid)
 void kswapd_stop(int nid)
 {
 	struct task_struct *kswapd = NODE_DATA(nid)->kswapd;
-	pg_data_t *pgdat = NODE_DATA(nid);
-#ifdef CONFIG_SWAP
-	struct page *page;
-
-	if (pgdat->kcompressd) {
-		wake_up(&pgdat->kcompressd_wait);
-		kthread_stop(pgdat->kcompressd);
-		pgdat->kcompressd = NULL;
-	}
-	if ((pgdat_fifo(pgdat))->in != (pgdat_fifo(pgdat))->out) {
-			unsigned long flags;
-			spin_lock_irqsave(&pgdat->kcompress_lock, flags);
-			while (__kfifo_out(pgdat_fifo(pgdat), &page, 1) == 1)
-				put_page(page);
-			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-		__kfifo_free(pgdat_fifo(pgdat));
-	}
-#endif
 
 	if (kswapd) {
 		kthread_stop(kswapd);
@@ -7268,9 +7230,6 @@ static int __init kswapd_init(void)
 {
 	int nid, ret;
 
-	kcompress_fifos = kcalloc(MAX_NUMNODES, sizeof(struct __kfifo), GFP_KERNEL);
-	if (!kcompress_fifos)
-		return -ENOMEM;
 	swap_setup();
 	for_each_node_state(nid, N_MEMORY)
  		kswapd_run(nid);

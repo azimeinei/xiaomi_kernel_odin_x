@@ -399,13 +399,10 @@ extern void kswapd_stop(int nid);
 
 /* linux/mm/page_io.c */
 extern int swap_readpage(struct page *page, bool do_poll);
-extern int sysctl_kcompressd;
 extern int swap_writepage(struct page *page, struct writeback_control *wbc);
 extern void end_swap_bio_write(struct bio *bio);
 extern int __swap_writepage(struct page *page, struct writeback_control *wbc,
 	bio_end_io_t end_write_func);
-extern int kcompressd(void *p);
-extern struct __kfifo *kcompress_fifos;
 extern int swap_set_page_dirty(struct page *page);
 
 int add_swap_extent(struct swap_info_struct *sis, unsigned long start_page,

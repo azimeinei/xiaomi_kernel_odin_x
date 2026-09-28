@@ -16,10 +16,6 @@
 #include <linux/gfp.h>
 #include <linux/pagemap.h>
 #include <linux/swap.h>
-#include <linux/kfifo.h>
-
-extern struct __kfifo *kcompress_fifos;
-#define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/bio.h>
 #include <linux/swapops.h>
 #include <linux/buffer_head.h>
@@ -29,11 +25,7 @@ extern struct __kfifo *kcompress_fifos;
 #include <linux/psi.h>
 #include <linux/uio.h>
 #include <linux/sched/task.h>
-#include <linux/kthread.h>
-#include <linux/freezer.h>
 #include <asm/pgtable.h>
-
-int sysctl_kcompressd = 1;
 
 static struct bio *get_swap_bio(gfp_t gfp_flags,
 				struct page *page, bio_end_io_t end_io)
@@ -207,8 +199,7 @@ bad_bmap:
  */
 int swap_writepage(struct page *page, struct writeback_control *wbc)
 {
-	int ret = 0, ret2;
-	pg_data_t *pgdat = page_pgdat(page);
+	int ret = 0;
 
 	if (try_to_free_swap(page)) {
 		unlock_page(page);
@@ -220,69 +211,9 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 		end_page_writeback(page);
 		goto out;
 	}
-
-	if (sysctl_kcompressd && current_is_kswapd() && pgdat->kcompressd) {
-		get_page(page);
-		unsigned long flags;
-		spin_lock_irqsave(&pgdat->kcompress_lock, flags);
-		ret2 = __kfifo_in(pgdat_fifo(pgdat), &page, 1);
-		spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-		if (ret2 == 1) {
-			wake_up(&pgdat->kcompressd_wait);
-			goto out;
-		}
-		put_page(page);
-	}
 	ret = __swap_writepage(page, wbc, end_swap_bio_write);
 out:
 	return ret;
-}
-
-int kcompressd(void *p)
-{
-	pg_data_t *pgdat = p;
-	struct writeback_control wbc = {
-		.sync_mode = WB_SYNC_NONE,
-	};
-	struct page *page;
-	unsigned long flags;
-
-	current->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
-	set_freezable();
-
-	while (!kthread_should_stop()) {
-		wait_event_freezable(pgdat->kcompressd_wait,
-				kthread_should_stop() ||
-				pgdat_fifo(pgdat)->in == pgdat_fifo(pgdat)->out);
-
-		while (pgdat_fifo(pgdat)->in != pgdat_fifo(pgdat)->out) {
-			spin_lock_irqsave(&pgdat->kcompress_lock, flags);
-			if (__kfifo_out(pgdat_fifo(pgdat), &page, 1) != 1) {
-				spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-				break;
-			}
-			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-
-			__swap_writepage(page, &wbc, end_swap_bio_write);
-			put_page(page);
-			cond_resched();
-		}
-	}
-
-	while (pgdat_fifo(pgdat)->in != pgdat_fifo(pgdat)->out) {
-		spin_lock_irqsave(&pgdat->kcompress_lock, flags);
-		if (__kfifo_out(pgdat_fifo(pgdat), &page, 1) != 1) {
-			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-			break;
-		}
-		spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
-
-		__swap_writepage(page, &wbc, end_swap_bio_write);
-		put_page(page);
-		cond_resched();
-	}
-
-	return 0;
 }
 
 static inline void count_swpout_vm_event(struct page *page)
@@ -370,7 +301,7 @@ out:
 int swap_readpage(struct page *page, bool synchronous)
 {
 	struct bio *bio;
-	int ret = 0, ret2;
+	int ret = 0;
 	struct swap_info_struct *sis = page_swap_info(page);
 	blk_qc_t qc;
 	struct gendisk *disk;
