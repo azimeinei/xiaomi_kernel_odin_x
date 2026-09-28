@@ -7202,7 +7202,7 @@ int kswapd_run(int nid)
 		return 0;
 
 #ifdef CONFIG_SWAP
-	if (!(pgdat_fifo(pgdat))->size) {
+	if ((pgdat_fifo(pgdat))->in == (pgdat_fifo(pgdat))->out) {
 		ret = __kfifo_alloc(pgdat_fifo(pgdat), KCOMPRESS_FIFO_SIZE,
 				  sizeof(struct page *), GFP_KERNEL);
 		if (!ret) {
@@ -7210,7 +7210,7 @@ int kswapd_run(int nid)
 							"kcompressd%d", nid);
 			if (IS_ERR(pgdat->kcompressd)) {
 				pgdat->kcompressd = NULL;
-				kfifo_free(pgdat_fifo(pgdat));
+				__kfifo_free(pgdat_fifo(pgdat));
 			}
 		}
 	}
@@ -7246,11 +7246,11 @@ void kswapd_stop(int nid)
 		kthread_stop(pgdat->kcompressd);
 		pgdat->kcompressd = NULL;
 	}
-	if ((pgdat_fifo(pgdat))->size) {
+	if ((pgdat_fifo(pgdat))->in != (pgdat_fifo(pgdat))->out) {
 		while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
 					  &pgdat->kcompress_lock) == 1)
 			put_page(page);
-		kfifo_free(pgdat_fifo(pgdat));
+		__kfifo_free(pgdat_fifo(pgdat));
 	}
 #endif
 
