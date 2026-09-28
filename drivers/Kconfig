@@ -234,6 +234,5 @@ source "drivers/uwb-sr100/Kconfig"
 
 source "drivers/mihw/Kconfig"
 
-source "drivers/kernelsu/Kconfig"
 
 endmenu
