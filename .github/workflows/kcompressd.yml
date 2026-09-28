@@ -56,7 +56,7 @@ jobs:
           make O=$BUILD_OUTPUT ${{ github.event.inputs.target_defconfig }}
           make -j$(nproc) O=$BUILD_OUTPUT \
             ARCH=arm64 \
-            CC=clang LD=D:\azi/prebuilts/proton/bin/aarch64-linux-gnu-ld \\
+            CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             Image.gz
 
