@@ -12,6 +12,7 @@ on:
         default: arm64
 
 env:
+  CLANG_VER: "r416183b"
   BUILD_OUTPUT: out
 
 jobs:
@@ -22,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt update -y
-          sudo apt install -y build-essential libssl-dev libelf-dev bison flex bc git zip unzip wget curl python3 cpio rsync lz4 xz-utils gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt install -y build-essential libssl-dev libelf-dev bison flex bc git zip unzip wget curl python3 cpio rsync lz4 xz-utils
 
       - name: Checkout kernel source
         uses: actions/checkout@v4
@@ -34,30 +35,47 @@ jobs:
         uses: actions/cache@v3
         with:
           path: prebuilts
-          key: tc-proton-20240107-v1
+          key: tc-clang-${{ env.CLANG_VER }}-gcc49-v5
 
-      - name: Download proton-clang
+      - name: Download AOSP clang + gcc
         if: steps.cache_tc.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          mkdir -p prebuilts
-          cd prebuilts
-          wget -q "https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz" -O proton.tar.gz
-          mkdir proton && tar -xf proton.tar.gz -C proton --strip-components=1 && rm proton.tar.gz
+          mkdir -p prebuilts/clang/host/linux-x86
+          cd prebuilts/clang/host/linux-x86
+          # AOSP clang r416183b from Chromium/AOSP mirror
+          wget -q "https://dl.google.com/android/repository/platform-clang-r416183b-linux-x86.zip" -O clang.zip || true
+          if [ ! -s clang.zip ]; then
+            wget -q "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-${{ env.CLANG_VER }}.tar.gz" -O clang.tar.gz
+            mkdir clang-${{ env.CLANG_VER }} && tar -xf clang.tar.gz -C clang-${{ env.CLANG_VER }} && rm clang.tar.gz
+          else
+            mkdir clang-${{ env.CLANG_VER }} && cd clang-${{ env.CLANG_VER }} && unzip -q ../clang.zip && cd .. && rm clang.zip
+          fi
+          [ -d clang-${{ env.CLANG_VER }}/bin ]
+          cd ../../../../..
+          if [ ! -d prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 ]; then
+            git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 || \
+            git clone --depth=1 https://github.com/dabao1965/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          fi
 
       - name: Build kernel
         run: |
           set -euo pipefail
-          export PATH="$PWD/prebuilts/proton/bin:$PATH"
+          export PATH="$PWD/prebuilts/clang/host/linux-x86/clang-${{ env.CLANG_VER }}/bin:$PWD/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CROSS_COMPILE=aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
           make O=$BUILD_OUTPUT ${{ github.event.inputs.target_defconfig }}
+          echo "CONFIG_CC_IS_CLANG=y" >> $BUILD_OUTPUT/.config
+          echo "CONFIG_GCC_COMPAT=y" >> $BUILD_OUTPUT/.config
+          make O=BUILD_OUTPUT olddefconfig || true
           make -j$(nproc) O=$BUILD_OUTPUT \
             ARCH=arm64 \
-            CC=clang \
+            CC=clang CXX=clang++ LD=ld.lld \
             CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             Image.gz
 
       - name: Upload Image.gz
