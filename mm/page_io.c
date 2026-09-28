@@ -16,6 +16,7 @@
 #include <linux/gfp.h>
 #include <linux/pagemap.h>
 #include <linux/swap.h>
+#include <linux/kfifo.h>
 #include <linux/bio.h>
 #include <linux/swapops.h>
 #include <linux/buffer_head.h>

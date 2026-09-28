@@ -20,7 +20,7 @@
 #include <linux/atomic.h>
 #include <linux/mm_types.h>
 #include <linux/page-flags.h>
-#include <linux/kfifo.h>
+struct __kfifo;
 #include <linux/android_kabi.h>
 #include <asm/page.h>
 
@@ -977,7 +977,7 @@ typedef struct pglist_data {
 #define KCOMPRESS_FIFO_SIZE 256
 	wait_queue_head_t kcompressd_wait;
 	struct task_struct *kcompressd;
-	DECLARE_KFIFO_PTR(kcompress_fifo, struct page *);
+	struct __kfifo kcompress_fifo;
 	spinlock_t kcompress_lock;
 
 #ifdef CONFIG_COMPACTION
