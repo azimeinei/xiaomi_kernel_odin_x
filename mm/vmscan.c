@@ -7247,8 +7247,11 @@ void kswapd_stop(int nid)
 		pgdat->kcompressd = NULL;
 	}
 	if ((pgdat_fifo(pgdat))->in != (pgdat_fifo(pgdat))->out) {
-		while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
-					  &pgdat->kcompress_lock) == 1)
+			unsigned long flags;
+			spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+			while (__kfifo_out(pgdat_fifo(pgdat), &page, 1) == 1)
+				put_page(page);
+			spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
 			put_page(page);
 		__kfifo_free(pgdat_fifo(pgdat));
 	}
