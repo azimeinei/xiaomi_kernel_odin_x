@@ -1669,17 +1669,6 @@ static struct ctl_table kern_table[] = {
 };
 
 static struct ctl_table vm_table[] = {
-#ifdef CONFIG_SWAP
-	{
-		.procname	= "kcompressd",
-		.data		= &sysctl_kcompressd,
-		.maxlen		= sizeof(sysctl_kcompressd),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= SYSCTL_ZERO,
-		.extra2		= SYSCTL_ONE,
-	},
-#endif
 	{
 		.procname	= "overcommit_memory",
 		.data		= &sysctl_overcommit_memory,

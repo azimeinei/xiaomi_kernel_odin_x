@@ -7196,21 +7196,6 @@ int kswapd_run(int nid)
 	if (pgdat->kswapd)
 		return 0;
 
-#ifdef CONFIG_SWAP
-	if (!kfifo_initialized(&pgdat->kcompress_fifo)) {
-		ret = kfifo_alloc(&pgdat->kcompress_fifo, KCOMPRESS_FIFO_SIZE,
-				  GFP_KERNEL);
-		if (!ret) {
-			pgdat->kcompressd = kthread_run(kcompressd, pgdat,
-							"kcompressd%d", nid);
-			if (IS_ERR(pgdat->kcompressd)) {
-				pgdat->kcompressd = NULL;
-				kfifo_free(&pgdat->kcompress_fifo);
-			}
-		}
-	}
-#endif
-
 	pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d:0", nid);
 	if (IS_ERR(pgdat->kswapd)) {
 		/* failure at boot is fatal */
@@ -7232,22 +7217,6 @@ int kswapd_run(int nid)
 void kswapd_stop(int nid)
 {
 	struct task_struct *kswapd = NODE_DATA(nid)->kswapd;
-	pg_data_t *pgdat = NODE_DATA(nid);
-#ifdef CONFIG_SWAP
-	struct page *page;
-
-	if (pgdat->kcompressd) {
-		wake_up(&pgdat->kcompressd_wait);
-		kthread_stop(pgdat->kcompressd);
-		pgdat->kcompressd = NULL;
-	}
-	if (kfifo_initialized(&pgdat->kcompress_fifo)) {
-		while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
-					  &pgdat->kcompress_lock) == 1)
-			put_page(page);
-		kfifo_free(&pgdat->kcompress_fifo);
-	}
-#endif
 
 	if (kswapd) {
 		kthread_stop(kswapd);
