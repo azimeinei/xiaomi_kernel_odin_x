@@ -21,6 +21,10 @@
 #include <linux/kernel_stat.h>
 #include <linux/swap.h>
 #include <linux/kfifo.h>
+#include <linux/swap.h>
+
+struct __kfifo kcompress_fifos[MAX_NUMNODES];
+#define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/pagemap.h>
 #include <linux/init.h>
 #include <linux/highmem.h>
@@ -7198,15 +7202,15 @@ int kswapd_run(int nid)
 		return 0;
 
 #ifdef CONFIG_SWAP
-	if (!kfifo_initialized(&pgdat->kcompress_fifo)) {
-		ret = kfifo_alloc(&pgdat->kcompress_fifo, KCOMPRESS_FIFO_SIZE,
+	if (!kfifo_initialized(pgdat_fifo(pgdat))) {
+		ret = kfifo_alloc(pgdat_fifo(pgdat), KCOMPRESS_FIFO_SIZE,
 				  GFP_KERNEL);
 		if (!ret) {
 			pgdat->kcompressd = kthread_run(kcompressd, pgdat,
 							"kcompressd%d", nid);
 			if (IS_ERR(pgdat->kcompressd)) {
 				pgdat->kcompressd = NULL;
-				kfifo_free(&pgdat->kcompress_fifo);
+				kfifo_free(pgdat_fifo(pgdat));
 			}
 		}
 	}
@@ -7242,11 +7246,11 @@ void kswapd_stop(int nid)
 		kthread_stop(pgdat->kcompressd);
 		pgdat->kcompressd = NULL;
 	}
-	if (kfifo_initialized(&pgdat->kcompress_fifo)) {
-		while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+	if (kfifo_initialized(pgdat_fifo(pgdat))) {
+		while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
 					  &pgdat->kcompress_lock) == 1)
 			put_page(page);
-		kfifo_free(&pgdat->kcompress_fifo);
+		kfifo_free(pgdat_fifo(pgdat));
 	}
 #endif
 

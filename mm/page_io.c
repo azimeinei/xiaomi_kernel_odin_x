@@ -17,6 +17,9 @@
 #include <linux/pagemap.h>
 #include <linux/swap.h>
 #include <linux/kfifo.h>
+
+extern struct __kfifo kcompress_fifos[];
+#define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/bio.h>
 #include <linux/swapops.h>
 #include <linux/buffer_head.h>
@@ -220,7 +223,7 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 
 	if (sysctl_kcompressd && current_is_kswapd() && pgdat->kcompressd) {
 		get_page(page);
-		if (kfifo_in_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+		if (kfifo_in_spinlocked(pgdat_fifo(pgdat), &page, 1,
 					&pgdat->kcompress_lock) == 1) {
 			wake_up(&pgdat->kcompressd_wait);
 			goto out;
@@ -246,9 +249,9 @@ int kcompressd(void *p)
 	while (!kthread_should_stop()) {
 		wait_event_freezable(pgdat->kcompressd_wait,
 				kthread_should_stop() ||
-				!kfifo_is_empty(&pgdat->kcompress_fifo));
+				!kfifo_is_empty(pgdat_fifo(pgdat)));
 
-		while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+		while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
 					  &pgdat->kcompress_lock) == 1) {
 			__swap_writepage(page, &wbc, end_swap_bio_write);
 			put_page(page);
@@ -256,7 +259,7 @@ int kcompressd(void *p)
 		}
 	}
 
-	while (kfifo_out_spinlocked(&pgdat->kcompress_fifo, &page, 1,
+	while (kfifo_out_spinlocked(pgdat_fifo(pgdat), &page, 1,
 				  &pgdat->kcompress_lock) == 1) {
 		__swap_writepage(page, &wbc, end_swap_bio_write);
 		put_page(page);
