@@ -35,25 +35,15 @@ jobs:
         uses: actions/cache@v3
         with:
           path: prebuilts
-          key: tc-clang-${{ env.CLANG_VER }}-gcc49-v2
+          key: tc-clang-${{ env.CLANG_VER }}-gcc49-v3
 
-      - name: Download AOSP clang + gcc
+      - name: Download clang (LineageOS mirror) + gcc
         if: steps.cache_tc.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          mkdir -p prebuilts/clang/host/linux-x86
-          cd prebuilts/clang/host/linux-x86
-          for i in 1 2 3 4 5; do
-            wget -q "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-${{ env.CLANG_VER }}.tar.gz" -O clang.tar.gz && break
-            echo "wget attempt $i failed, retrying..."
-            sleep 15
-          done
-          [ -s clang.tar.gz ]
-          mkdir clang-${{ env.CLANG_VER }} && tar -xf clang.tar.gz -C clang-${{ env.CLANG_VER }} && rm clang.tar.gz
-          cd ../../../../..
-          if [ ! -d prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 ]; then
-            git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
-          fi
+          mkdir -p prebuilts/clang/host/linux-x86 prebuilts/gcc/linux-x86/aarch64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-${{ env.CLANG_VER }} prebuilts/clang/host/linux-x86/clang-${{ env.CLANG_VER }}
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
 
       - name: Build kernel
         run: |
