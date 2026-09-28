@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt update -y
-          sudo apt install -y build-essential libssl-dev libelf-dev bison flex bc git zip unzip wget curl python3 cpio rsync lz4 xz-utils
+          sudo apt install -y build-essential libssl-dev libelf-dev bison flex bc git zip unzip wget curl python3 cpio rsync lz4 xz-utils gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Checkout kernel source
         uses: actions/checkout@v4
@@ -51,12 +51,12 @@ jobs:
           export PATH="$PWD/prebuilts/proton/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-android-
-          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           make O=$BUILD_OUTPUT ${{ github.event.inputs.target_defconfig }}
           make -j$(nproc) O=$BUILD_OUTPUT \
             ARCH=arm64 \
-            CC=clang \
+            CC=clang LD=D:\azi/prebuilts/proton/bin/aarch64-linux-gnu-ld \\
             CLANG_TRIPLE=aarch64-linux-gnu- \
             Image.gz
 
