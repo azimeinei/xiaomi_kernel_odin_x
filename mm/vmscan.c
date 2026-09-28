@@ -23,7 +23,7 @@
 #include <linux/kfifo.h>
 #include <linux/swap.h>
 
-struct __kfifo kcompress_fifos[MAX_NUMNODES];
+struct __kfifo *kcompress_fifos;
 #define pgdat_fifo(pg) (&kcompress_fifos[(pg)->node_id])
 #include <linux/pagemap.h>
 #include <linux/init.h>
@@ -7266,6 +7266,9 @@ static int __init kswapd_init(void)
 {
 	int nid, ret;
 
+	kcompress_fifos = kcalloc(MAX_NUMNODES, sizeof(struct __kfifo), GFP_KERNEL);
+	if (!kcompress_fifos)
+		return -ENOMEM;
 	swap_setup();
 	for_each_node_state(nid, N_MEMORY)
  		kswapd_run(nid);
