@@ -51,6 +51,13 @@ jobs:
           echo "$GITHUB_WORKSPACE/scripts/tools/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/scripts/tools/arm-linux-androideabi-4.9/bin" >> "$GITHUB_PATH"
 
+      - name: Select the running SukiSU Ultra implementation
+        run: |
+          rm -rf drivers/kernelsu
+          cp -a scripts/tools/root/SukiSU-Ultra/kernelsu drivers/kernelsu
+          test -f drivers/kernelsu/Kconfig
+          grep -q '^config RKSU$' drivers/kernelsu/Kconfig
+
       - name: Verify reconstructed source
         run: |
           test "$(sed -n 's/^SUBLEVEL = //p' Makefile)" = "298"
@@ -83,6 +90,9 @@ jobs:
           grep -qx 'CONFIG_PREEMPT=y' out/.config
           grep -qx 'CONFIG_NR_CPUS=8' out/.config
           grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
+          grep -qx 'CONFIG_KSU=y' out/.config
+          grep -qx 'CONFIG_RKSU=y' out/.config
+          grep -qx '# CONFIG_KPM is not set' out/.config
 
       - name: Build kernel
         run: |
