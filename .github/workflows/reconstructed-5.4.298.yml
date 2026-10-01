@@ -1,10 +1,10 @@
-name: Reconstructed odin 5.4.298 WALT scheduler test
+name: Reconstructed odin 5.4.298 standalone WALT governor test
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - reconstructed-5.4.298-walt-test
+      - reconstructed-5.4.298-waltgov-test
 
 permissions:
   contents: read
@@ -95,6 +95,9 @@ jobs:
           grep -qx '# CONFIG_KPM is not set' out/.config
           grep -qx 'CONFIG_ZRAM_KCOMPRESSD=y' out/.config
           grep -qx 'CONFIG_SCHED_WALT=y' out/.config
+          grep -qx 'CONFIG_CPU_FREQ_GOV_WALT=y' out/.config
+          grep -qx 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' out/.config
+          grep -qx '# CONFIG_CPU_FREQ_DEFAULT_GOV_WALT is not set' out/.config
 
       - name: Build kernel
         run: |
@@ -112,7 +115,7 @@ jobs:
           test -s out/arch/arm64/boot/Image
           strings out/arch/arm64/boot/Image | grep -F "Linux version $EXPECTED_RELEASE" | head -1
 
-      - name: Package AnyKernel3 WALT scheduler test
+      - name: Package AnyKernel3 standalone WALT governor test
         run: |
           rm -rf package
           cp -a scripts/tools/AnyKernel3 package
@@ -120,19 +123,19 @@ jobs:
           rm -f package/*.zip
           (
             cd package
-            zip -r9 ../odin-reconstructed-5.4.298-walt-test.zip .
+            zip -r9 ../odin-reconstructed-5.4.298-waltgov-test.zip .
           )
-          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-walt-test.zip | tee SHA256SUMS
+          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-waltgov-test.zip | tee SHA256SUMS
 
       - name: Upload candidate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: odin-reconstructed-5.4.298-walt-test
+          name: odin-reconstructed-5.4.298-waltgov-test
           if-no-files-found: warn
           retention-days: 14
           path: |
-            odin-reconstructed-5.4.298-walt-test.zip
+            odin-reconstructed-5.4.298-waltgov-test.zip
             out/arch/arm64/boot/Image
             out/.config
             kernelrelease.txt

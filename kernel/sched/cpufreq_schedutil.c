@@ -17,6 +17,15 @@
 
 #define IOWAIT_BOOST_MIN	(SCHED_CAPACITY_SCALE / 8)
 
+#ifndef CPUFREQ_GOV_NAME
+#define CPUFREQ_GOV_NAME	"schedutil"
+#endif
+
+#if defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL) && \
+	!defined(CPUFREQ_GOV_SKIP_SCHEDUTIL_DEFAULT)
+#define CPUFREQ_GOV_DEFAULT_ENABLED
+#endif
+
 struct sugov_tunables {
 	struct gov_attr_set	attr_set;
 	unsigned int		up_rate_limit_us;
@@ -1397,7 +1406,7 @@ static void sugov_limits(struct cpufreq_policy *policy)
 }
 
 static struct cpufreq_governor schedutil_gov = {
-	.name			= "schedutil",
+	.name			= CPUFREQ_GOV_NAME,
 	.owner			= THIS_MODULE,
 	.dynamic_switching	= true,
 	.init			= sugov_init,
@@ -1407,7 +1416,7 @@ static struct cpufreq_governor schedutil_gov = {
 	.limits			= sugov_limits,
 };
 
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
+#ifdef CPUFREQ_GOV_DEFAULT_ENABLED
 struct cpufreq_governor *cpufreq_default_governor(void)
 {
 	return &schedutil_gov;
