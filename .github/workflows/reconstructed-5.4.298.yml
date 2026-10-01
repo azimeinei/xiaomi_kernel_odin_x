@@ -1,0 +1,129 @@
+name: Reconstructed odin 5.4.298 candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - reconstructed-5.4.298-safe
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      KBUILD_BUILD_USER: "18201329"
+      KBUILD_BUILD_HOST: "qq.com"
+      KBUILD_BUILD_VERSION: "6"
+      KBUILD_BUILD_TIMESTAMP: "Tue Aug 25 10:53:38 CST 2026"
+      EXPECTED_RELEASE: 5.4.298-11509ce9-g62792d2b61f7
+
+    steps:
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          sudo apt-get clean
+          df -h
+
+      - name: Check out reconstructed source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ca-certificates flex libelf-dev \
+            libncurses-dev libncurses5 libssl-dev libtinfo5 python3 rsync zip
+          sudo apt-get clean
+
+      - name: Prepare original toolchain
+        run: |
+          chmod -R a+x scripts/tools/clang-r383902b1/bin
+          chmod -R a+x scripts/tools/aarch64-linux-android-4.9/bin
+          chmod -R a+x scripts/tools/arm-linux-androideabi-4.9/bin
+          echo "$GITHUB_WORKSPACE/scripts/tools/clang-r383902b1/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/scripts/tools/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/scripts/tools/arm-linux-androideabi-4.9/bin" >> "$GITHUB_PATH"
+
+      - name: Verify reconstructed source
+        run: |
+          test "$(sed -n 's/^SUBLEVEL = //p' Makefile)" = "298"
+          grep -qx 'CONFIG_LOCALVERSION="-11509ce9"' arch/arm64/configs/odin_defconfig
+          test -f drivers/input/input.c
+          test -f drivers/extcon/extcon.c
+          test -f drivers/media/Makefile
+          test -f drivers/soc/qcom/Kconfig
+          test -f drivers/thermal/Makefile
+          test -f kernel/bpf/ringbuf.c
+          test -f kernel/bpf/trampoline.c
+          test "$(cat .scmversion)" = "-g62792d2b61f7"
+          clang --version | tee clang-version.txt
+          grep -q 'clang version 11.0.2' clang-version.txt
+
+      - name: Configure kernel
+        run: |
+          make O=out \
+            ARCH=arm64 SUBARCH=arm64 \
+            CC=clang HOSTCC=clang HOSTCXX=clang++ LD=ld.lld \
+            AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
+            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf \
+            HOSTAR=llvm-ar HOSTLD=ld.lld \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LLVM=1 LLVM_IAS=1 odin_defconfig
+          make -s O=out ARCH=arm64 kernelrelease | tee kernelrelease.txt
+          test "$(cat kernelrelease.txt)" = "$EXPECTED_RELEASE"
+          grep -qx 'CONFIG_PREEMPT=y' out/.config
+          grep -qx 'CONFIG_NR_CPUS=8' out/.config
+          grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
+
+      - name: Build kernel
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" O=out \
+            ARCH=arm64 SUBARCH=arm64 \
+            CC=clang HOSTCC=clang HOSTCXX=clang++ LD=ld.lld \
+            AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
+            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf \
+            HOSTAR=llvm-ar HOSTLD=ld.lld \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LLVM=1 LLVM_IAS=1 2>&1 | tee build.log
+          test -s out/arch/arm64/boot/Image
+          strings out/arch/arm64/boot/Image | grep -F "Linux version $EXPECTED_RELEASE" | head -1
+
+      - name: Package AnyKernel3 candidate
+        run: |
+          rm -rf package
+          cp -a scripts/tools/AnyKernel3 package
+          cp out/arch/arm64/boot/Image package/Image
+          rm -f package/*.zip
+          (
+            cd package
+            zip -r9 ../odin-reconstructed-5.4.298-candidate.zip .
+          )
+          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-candidate.zip | tee SHA256SUMS
+
+      - name: Upload candidate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin-reconstructed-5.4.298-candidate
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            odin-reconstructed-5.4.298-candidate.zip
+            out/arch/arm64/boot/Image
+            out/.config
+            kernelrelease.txt
+            clang-version.txt
+            SHA256SUMS
+            build.log
