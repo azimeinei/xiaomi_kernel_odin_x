@@ -23,6 +23,8 @@
 #include <linux/android_kabi.h>
 #include <asm/page.h>
 
+struct bio;
+
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
 #define MAX_ORDER 11
@@ -972,6 +974,17 @@ typedef struct pglist_data {
 	enum zone_type kswapd_classzone_idx;
 
 	int kswapd_failures;		/* Number of 'reclaimed == 0' runs */
+
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+#define KCOMPRESS_QUEUE_SIZE	256
+#define KCOMPRESS_QUEUE_MASK	(KCOMPRESS_QUEUE_SIZE - 1)
+	wait_queue_head_t kcompressd_wait;
+	struct task_struct *kcompressd;
+	struct bio *kcompress_queue[KCOMPRESS_QUEUE_SIZE];
+	unsigned int kcompress_head;
+	unsigned int kcompress_tail;
+	spinlock_t kcompress_lock;
+#endif
 
 #ifdef CONFIG_COMPACTION
 	int kcompactd_max_order;

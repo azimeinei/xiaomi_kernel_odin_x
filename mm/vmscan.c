@@ -7207,6 +7207,22 @@ int kswapd_run(int nid)
 	}
 	ret = multi_kswapd_run(nid);
 
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+	if (!pgdat->kcompressd) {
+		struct task_struct *task;
+
+		pgdat->kcompress_head = 0;
+		pgdat->kcompress_tail = 0;
+		task = kthread_run(kcompressd, pgdat, "kcompressd%d", nid);
+		if (IS_ERR(task)) {
+			pr_warn("Failed to start kcompressd on node %d: %ld\n",
+				nid, PTR_ERR(task));
+		} else {
+			WRITE_ONCE(pgdat->kcompressd, task);
+		}
+	}
+#endif
+
 	return ret;
 }
 
@@ -7216,14 +7232,24 @@ int kswapd_run(int nid)
  */
 void kswapd_stop(int nid)
 {
-	struct task_struct *kswapd = NODE_DATA(nid)->kswapd;
+	pg_data_t *pgdat = NODE_DATA(nid);
+	struct task_struct *kswapd = pgdat->kswapd;
 
 	if (kswapd) {
 		kthread_stop(kswapd);
-		NODE_DATA(nid)->kswapd = NULL;
+		pgdat->kswapd = NULL;
 	}
 
 	multi_kswapd_stop(nid);
+
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+	if (pgdat->kcompressd) {
+		struct task_struct *task = pgdat->kcompressd;
+
+		WRITE_ONCE(pgdat->kcompressd, NULL);
+		kthread_stop(task);
+	}
+#endif
 }
 
 static int __init kswapd_init(void)

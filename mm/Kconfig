@@ -656,6 +656,19 @@ config BALANCE_ANON_FILE_RECLAIM
 	  Swapping anonymous pages out to memory can be efficient enough to justify
 	  treating anonymous and file backed pages equally.
 
+config ZRAM_KCOMPRESSD
+	bool "Offload zram swap writes from kswapd"
+	depends on SWAP && ZRAM
+	help
+	  Create one kcompressd thread per memory node and let it submit swap
+	  write bios prepared by kswapd. This moves synchronous zram compression
+	  out of the reclaim thread while preserving normal swap writeback state.
+
+	  The runtime switch /proc/sys/vm/kcompressd defaults to enabled. Setting
+	  it to 0 makes new writes use the original path.
+
+	  If unsure, say N.
+
 config DEFERRED_STRUCT_PAGE_INIT
 	bool "Defer initialisation of struct pages to kthreads"
 	depends on SPARSEMEM

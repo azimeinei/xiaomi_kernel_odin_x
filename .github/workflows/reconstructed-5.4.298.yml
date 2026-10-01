@@ -1,10 +1,10 @@
-name: Reconstructed odin 5.4.298 candidate
+name: Reconstructed odin 5.4.298 zram test
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - reconstructed-5.4.298-safe
+      - reconstructed-5.4.298-zram-test
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
       SUBARCH: arm64
       KBUILD_BUILD_USER: "18201329"
       KBUILD_BUILD_HOST: "qq.com"
-      KBUILD_BUILD_VERSION: "6"
+      KBUILD_BUILD_VERSION: "7"
       KBUILD_BUILD_TIMESTAMP: "Tue Aug 25 10:53:38 CST 2026"
       EXPECTED_RELEASE: 5.4.298-11509ce9-g62792d2b61f7
 
@@ -93,6 +93,7 @@ jobs:
           grep -qx 'CONFIG_KSU=y' out/.config
           grep -qx 'CONFIG_RKSU=y' out/.config
           grep -qx '# CONFIG_KPM is not set' out/.config
+          grep -qx 'CONFIG_ZRAM_KCOMPRESSD=y' out/.config
 
       - name: Build kernel
         run: |
@@ -110,7 +111,7 @@ jobs:
           test -s out/arch/arm64/boot/Image
           strings out/arch/arm64/boot/Image | grep -F "Linux version $EXPECTED_RELEASE" | head -1
 
-      - name: Package AnyKernel3 candidate
+      - name: Package AnyKernel3 zram test
         run: |
           rm -rf package
           cp -a scripts/tools/AnyKernel3 package
@@ -118,19 +119,19 @@ jobs:
           rm -f package/*.zip
           (
             cd package
-            zip -r9 ../odin-reconstructed-5.4.298-candidate.zip .
+            zip -r9 ../odin-reconstructed-5.4.298-zram-test.zip .
           )
-          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-candidate.zip | tee SHA256SUMS
+          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-zram-test.zip | tee SHA256SUMS
 
       - name: Upload candidate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: odin-reconstructed-5.4.298-candidate
+          name: odin-reconstructed-5.4.298-zram-test
           if-no-files-found: warn
           retention-days: 14
           path: |
-            odin-reconstructed-5.4.298-candidate.zip
+            odin-reconstructed-5.4.298-zram-test.zip
             out/arch/arm64/boot/Image
             out/.config
             kernelrelease.txt

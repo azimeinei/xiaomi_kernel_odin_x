@@ -25,7 +25,55 @@
 #include <linux/psi.h>
 #include <linux/uio.h>
 #include <linux/sched/task.h>
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+#include <linux/kthread.h>
+#include <linux/freezer.h>
+#endif
 #include <asm/pgtable.h>
+
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+int sysctl_kcompressd __read_mostly = 1;
+
+static bool kcompress_queue_empty(struct pglist_data *pgdat)
+{
+	return READ_ONCE(pgdat->kcompress_head) ==
+		READ_ONCE(pgdat->kcompress_tail);
+}
+
+static bool kcompress_enqueue(struct pglist_data *pgdat, struct bio *bio)
+{
+	unsigned long flags;
+	bool queued = false;
+
+	spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+	if (pgdat->kcompress_head - pgdat->kcompress_tail <
+	    KCOMPRESS_QUEUE_SIZE) {
+		pgdat->kcompress_queue[pgdat->kcompress_head &
+					KCOMPRESS_QUEUE_MASK] = bio;
+		pgdat->kcompress_head++;
+		queued = true;
+	}
+	spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+
+	return queued;
+}
+
+static struct bio *kcompress_dequeue(struct pglist_data *pgdat)
+{
+	unsigned long flags;
+	struct bio *bio = NULL;
+
+	spin_lock_irqsave(&pgdat->kcompress_lock, flags);
+	if (pgdat->kcompress_head != pgdat->kcompress_tail) {
+		bio = pgdat->kcompress_queue[pgdat->kcompress_tail &
+					     KCOMPRESS_QUEUE_MASK];
+		pgdat->kcompress_tail++;
+	}
+	spin_unlock_irqrestore(&pgdat->kcompress_lock, flags);
+
+	return bio;
+}
+#endif
 
 static struct bio *get_swap_bio(gfp_t gfp_flags,
 				struct page *page, bio_end_io_t end_io)
@@ -193,6 +241,8 @@ bad_bmap:
 	goto out;
 }
 
+static inline void count_swpout_vm_event(struct page *page);
+
 /*
  * We may have stale swap cache pages in memory: notice
  * them here and get rid of the unnecessary final write.
@@ -211,10 +261,78 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 		end_page_writeback(page);
 		goto out;
 	}
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+	if (sysctl_kcompressd && current_is_kswapd()) {
+		struct swap_info_struct *sis = page_swap_info(page);
+		pg_data_t *pgdat = page_pgdat(page);
+		struct bio *bio;
+
+		if (READ_ONCE(pgdat->kcompressd) && sis->bdev &&
+		    !strncmp(sis->bdev->bd_disk->disk_name, "zram", 4)) {
+			bio = get_swap_bio(GFP_NOIO, page, end_swap_bio_write);
+			if (bio) {
+				bio->bi_opf = REQ_OP_WRITE | REQ_SWAP |
+					wbc_to_write_flags(wbc);
+				bio_associate_blkg_from_page(bio, page);
+				count_swpout_vm_event(page);
+
+				/* Keep the page alive while the bio waits in our queue. */
+				get_page(page);
+				set_page_writeback(page);
+				unlock_page(page);
+
+				if (kcompress_enqueue(pgdat, bio)) {
+					wake_up(&pgdat->kcompressd_wait);
+				} else {
+					submit_bio(bio);
+					put_page(page);
+				}
+				goto out;
+			}
+		}
+	}
+#endif
 	ret = __swap_writepage(page, wbc, end_swap_bio_write);
 out:
 	return ret;
 }
+
+#ifdef CONFIG_ZRAM_KCOMPRESSD
+int kcompressd(void *p)
+{
+	pg_data_t *pgdat = p;
+	struct bio *bio;
+
+	/* PF_KSWAPD would make writes from this thread recurse into the queue. */
+	current->flags |= PF_MEMALLOC | PF_SWAPWRITE;
+	set_freezable();
+
+	while (!kthread_should_stop()) {
+		wait_event_freezable(pgdat->kcompressd_wait,
+				kthread_should_stop() ||
+				!kcompress_queue_empty(pgdat));
+
+		while ((bio = kcompress_dequeue(pgdat)) != NULL) {
+			struct page *page = bio_first_page_all(bio);
+
+			submit_bio(bio);
+			put_page(page);
+			cond_resched();
+		}
+	}
+
+	/* All producers are stopped before kthread_stop(), so this is finite. */
+	while ((bio = kcompress_dequeue(pgdat)) != NULL) {
+		struct page *page = bio_first_page_all(bio);
+
+		submit_bio(bio);
+		put_page(page);
+		cond_resched();
+	}
+
+	return 0;
+}
+#endif
 
 static inline void count_swpout_vm_event(struct page *page)
 {
