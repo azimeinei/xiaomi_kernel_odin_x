@@ -6,6 +6,7 @@ on:
     paths:
       - 'include/uapi/linux/capability.h'
       - 'security/selinux/include/classmap.h'
+      - 'drivers/Makefile'
       - '.github/workflows/kcompressd.yml'
   workflow_dispatch:
     inputs:
