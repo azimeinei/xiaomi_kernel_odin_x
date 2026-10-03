@@ -376,7 +376,10 @@ struct vfs_ns_cap_data {
 /* Allow privileged BPF operations and advanced verifier features. */
 #define CAP_BPF			39
 
-#define CAP_LAST_CAP         CAP_BPF
+/* Allow checkpoint/restore related operations (added in Linux 5.9). */
+#define CAP_CHECKPOINT_RESTORE	40
+
+#define CAP_LAST_CAP         CAP_CHECKPOINT_RESTORE
 
 #define cap_valid(x) ((x) >= 0 && (x) <= CAP_LAST_CAP)
 
