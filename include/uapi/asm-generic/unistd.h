@@ -855,9 +855,11 @@ __SYSCALL(__NR_close_range, sys_close_range)
 
 #define __NR_process_madvise 440
 __SYSCALL(__NR_process_madvise, sys_process_madvise)
+#define __NR_process_mrelease 448
+__SYSCALL(__NR_process_mrelease, sys_process_mrelease)
 
 #undef __NR_syscalls
-#define __NR_syscalls 441
+#define __NR_syscalls 449
 
 /*
  * 32 bit systems traditionally used different
