@@ -2,6 +2,10 @@
 #define KSU_SUSFS_DEF_H
 
 #include <linux/bits.h>
+#include <linux/kernel.h>
+#include <linux/thread_info.h>
+#include <linux/version.h>
+#include <linux/cred.h>
 
 /********/
 /* ENUM */
@@ -57,6 +61,47 @@
 #define DATA_ADB_UMOUNT_FOR_ZYGOTE_SYSTEM_PROCESS "/data/adb/susfs_umount_for_zygote_system_process"
 #define DATA_ADB_NO_AUTO_ADD_SUS_BIND_MOUNT "/data/adb/susfs_no_auto_add_sus_bind_mount"
 #define DATA_ADB_NO_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT "/data/adb/susfs_no_auto_add_sus_ksu_default_mount"
+
+/* BakaSU compat: emulate the newer susfs per-thread state API on susfs v1 */
+#ifndef TIF_PROC_UMOUNTED
+#define TIF_PROC_UMOUNTED 33
+#endif
+#ifndef TIF_PROC_NO_SU
+#define TIF_PROC_NO_SU 34
+#endif
+
+static inline bool susfs_is_current_proc_umounted(void) {
+	return (likely(test_thread_flag(TIF_PROC_UMOUNTED)));
+}
+
+static inline void susfs_set_current_proc_umounted(void) {
+	set_thread_flag(TIF_PROC_UMOUNTED);
+}
+
+static inline bool susfs_is_current_proc_umounted_app(void) {
+	return (likely(test_thread_flag(TIF_PROC_UMOUNTED)) &&
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
+			__kuid_val(current_uid()) >= 10000);
+#else
+			current_uid().val >= 10000);
+#endif
+}
+
+static inline bool susfs_is_current_proc_no_su(void) {
+	return (likely(test_thread_flag(TIF_PROC_NO_SU)));
+}
+
+static inline void susfs_set_current_proc_no_su(void) {
+	set_thread_flag(TIF_PROC_NO_SU);
+}
+
+static inline void susfs_clear_current_proc_no_su(void) {
+	clear_thread_flag(TIF_PROC_NO_SU);
+}
+
+static inline void susfs_set_current_proc_umounted_for_zygote_next(void) {
+	/* compat: this susfs build has no zygote_next specific state */
+}
 #define DATA_ADB_NO_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT "/data/adb/susfs_no_auto_add_try_umount_for_bind_mount"
 
 #endif // #ifndef KSU_SUSFS_DEF_H

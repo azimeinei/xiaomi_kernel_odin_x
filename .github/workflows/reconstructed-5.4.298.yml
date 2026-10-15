@@ -92,6 +92,10 @@ jobs:
           grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
           grep -qx 'CONFIG_KSU=y' out/.config
           grep -qx 'CONFIG_RKSU=y' out/.config
+          grep -qx 'CONFIG_KSU_SUSFS=y' out/.config
+          grep -qx 'CONFIG_KSU_SUSFS_SUS_PATH=y' out/.config
+          grep -qx 'CONFIG_KSU_SUSFS_SUS_MOUNT=y' out/.config
+          grep -qx 'CONFIG_KSU_SUSFS_SUS_KSTAT=y' out/.config
           grep -qx '# CONFIG_KPM is not set' out/.config
           grep -qx 'CONFIG_ZRAM_KCOMPRESSD=y' out/.config
           grep -qx 'CONFIG_SCHED_WALT=y' out/.config
