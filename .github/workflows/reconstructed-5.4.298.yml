@@ -51,12 +51,12 @@ jobs:
           echo "$GITHUB_WORKSPACE/scripts/tools/aarch64-linux-android-4.9/bin" >> "$GITHUB_PATH"
           echo "$GITHUB_WORKSPACE/scripts/tools/arm-linux-androideabi-4.9/bin" >> "$GITHUB_PATH"
 
-      - name: Select the running SukiSU Ultra implementation
+      - name: Select the BakaSU implementation
         run: |
           rm -rf drivers/kernelsu
-          cp -a scripts/tools/root/SukiSU-Ultra/kernelsu drivers/kernelsu
+          cp -a scripts/tools/root/BakaSU drivers/kernelsu
           test -f drivers/kernelsu/Kconfig
-          grep -q '^config RKSU$' drivers/kernelsu/Kconfig
+          grep -q '^config KSU_SUSFS$' drivers/kernelsu/Kconfig
 
       - name: Verify reconstructed source
         run: |
@@ -91,7 +91,6 @@ jobs:
           grep -qx 'CONFIG_NR_CPUS=8' out/.config
           grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
           grep -qx 'CONFIG_KSU=y' out/.config
-          grep -qx 'CONFIG_RKSU=y' out/.config
           grep -qx 'CONFIG_KSU_SUSFS=y' out/.config
           grep -qx 'CONFIG_KSU_SUSFS_SUS_PATH=y' out/.config
           grep -qx 'CONFIG_KSU_SUSFS_SUS_MOUNT=y' out/.config

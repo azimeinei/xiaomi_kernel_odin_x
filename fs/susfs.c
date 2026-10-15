@@ -901,6 +901,12 @@ out:
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 
+/* BakaSU compat: deferred extra works hook (no-op on susfs v1) */
+struct work_struct susfs_extra_works;
+static void susfs_run_extra_works(struct work_struct *work) {
+	/* susfs v1 has no sus_path loop list; nothing deferred to run */
+}
+
 /* susfs_init */
 void susfs_init(void) {
 	spin_lock_init(&susfs_spin_lock);
@@ -908,6 +914,7 @@ void susfs_init(void) {
 	spin_lock_init(&susfs_uname_spin_lock);
 	susfs_my_uname_init();
 #endif
+	INIT_WORK(&susfs_extra_works, susfs_run_extra_works);
 	SUSFS_LOGI("susfs is initialized! version: " SUSFS_VERSION " \n");
 }
 
