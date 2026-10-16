@@ -133,6 +133,17 @@ bypass_orig_flow:
 		   real_mount(file->f_path.mnt)->mnt_id);
 #endif
 
+	show_fd_locks(m, file, files);
+	if (seq_has_overflowed(m))
+		goto out;
+
+	if (file->f_op->show_fdinfo)
+		file->f_op->show_fdinfo(m, file);
+
+out:
+	fput(file);
+	return 0;
+}
 
 static int seq_fdinfo_open(struct inode *inode, struct file *file)
 {
