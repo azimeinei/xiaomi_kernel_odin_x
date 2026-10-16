@@ -33,6 +33,10 @@
 #include <linux/dnotify.h>
 #include <linux/compat.h>
 
+#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+#include <linux/susfs_def.h>
+#endif
+
 #include "internal.h"
 
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
@@ -1121,7 +1125,7 @@ static long do_sys_openat2(int dfd, const char __user *filename,
 retry:
 #endif // #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
 	if (fd >= 0) {
-		struct file *f = do_filp_open(dfd, tmp, &op);
+		struct file *f = do_filp_open(dfd, tmp, op);
 #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
 		if (!is_inode_open_redirect && f && !IS_ERR(f)) {
 			struct inode *inode = file_inode(f);
