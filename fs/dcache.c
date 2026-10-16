@@ -34,6 +34,7 @@
 #include <linux/list_lru.h>
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #include <linux/susfs_def.h>
+extern bool susfs_is_inode_sus_path(struct inode *inode);
 #endif
 #include "internal.h"
 #include "mount.h"
@@ -2299,7 +2300,7 @@ seqretry:
 			if (dentry_cmp(dentry, str, hashlen_len(hashlen)) != 0)
 				continue;
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-			if (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {
+			if (dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
 				continue;
 			}
 #endif
@@ -2387,7 +2388,7 @@ struct dentry *__d_lookup(const struct dentry *parent, const struct qstr *name)
 			continue;
 
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-		if (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {
+		if (dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
 			continue;
 		}
 #endif

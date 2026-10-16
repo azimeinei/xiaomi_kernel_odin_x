@@ -2261,6 +2261,12 @@ static inline void init_sync_kiocb(struct kiocb *kiocb, struct file *filp)
 #define I_OVL_INUSE		(1 << 14)
 #define I_CREATING		(1 << 15)
 #define I_SYNC_QUEUED		(1 << 17)
+/* susfs: sus path / sus mount / sus kstat / open redirect / sus map flags */
+#define AS_FLAGS_SUS_PATH	(1UL << 33)
+#define AS_FLAGS_SUS_MOUNT	(1UL << 34)
+#define AS_FLAGS_SUS_KSTAT	(1UL << 35)
+#define AS_FLAGS_OPEN_REDIRECT	(1UL << 36)
+#define AS_FLAGS_SUS_MAP	(1UL << 39)
 
 #define I_DIRTY_INODE (I_DIRTY_SYNC | I_DIRTY_DATASYNC)
 #define I_DIRTY (I_DIRTY_INODE | I_DIRTY_PAGES)
