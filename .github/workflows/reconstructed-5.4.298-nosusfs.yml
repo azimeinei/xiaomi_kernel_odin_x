@@ -62,7 +62,9 @@ jobs:
         run: |
           sed -i 's/^CONFIG_KSU_SUSFS=y/# CONFIG_KSU_SUSFS is not set/' arch/arm64/configs/odin_defconfig
           sed -i '/^CONFIG_KSU_SUSFS_/d' arch/arm64/configs/odin_defconfig
+          sed -i 's/^# CONFIG_KSU_MANUAL_HOOK is not set/CONFIG_KSU_MANUAL_HOOK=y/' arch/arm64/configs/odin_defconfig
           grep -q '^# CONFIG_KSU_SUSFS is not set' arch/arm64/configs/odin_defconfig
+          grep -q '^CONFIG_KSU_MANUAL_HOOK=y' arch/arm64/configs/odin_defconfig
 
       - name: Verify reconstructed source
         run: |
