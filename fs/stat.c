@@ -164,7 +164,7 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
 	if (f.file) {
 		error = vfs_getattr(&f.file->f_path, stat,
 				    request_mask, query_flags);
-#ifdef CONFIG_KSU
+#ifdef CONFIG_KSU_SUSFS
 		extern struct static_key_true ksu_is_init_rc_hook_enabled;
 		extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
 		if (!error && static_branch_unlikely(&ksu_is_init_rc_hook_enabled))
