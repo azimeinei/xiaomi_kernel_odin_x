@@ -145,6 +145,7 @@ COND_SYSCALL(clone3);
 /* kernel/futex.c */
 COND_SYSCALL(futex);
 COND_SYSCALL(futex_time32);
+COND_SYSCALL(futex_waitv);
 COND_SYSCALL(set_robust_list);
 COND_SYSCALL_COMPAT(set_robust_list);
 COND_SYSCALL(get_robust_list);
@@ -286,6 +287,9 @@ COND_SYSCALL(madvise);
 COND_SYSCALL(process_madvise);
 COND_SYSCALL(process_mrelease);
 COND_SYSCALL(close_range);
+COND_SYSCALL(openat2);
+COND_SYSCALL(pidfd_getfd);
+COND_SYSCALL(faccessat2);
 COND_SYSCALL(remap_file_pages);
 COND_SYSCALL(mbind);
 COND_SYSCALL_COMPAT(mbind);
