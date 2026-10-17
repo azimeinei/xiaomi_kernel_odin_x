@@ -1623,6 +1623,14 @@ static struct dentry *lookup_dcache(const struct qstr *name,
 			return ERR_PTR(error);
 		}
 	}
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	if (dentry && !IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
+		if (d_in_lookup(dentry))
+			d_lookup_done(dentry);
+		dput(dentry);
+		return NULL;
+	}
+#endif
 	return dentry;
 }
 
@@ -1639,6 +1647,11 @@ static struct dentry *__lookup_hash(const struct qstr *name,
 	struct dentry *dentry = lookup_dcache(name, base, flags);
 	struct dentry *old;
 	struct inode *dir = base->d_inode;
+
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	bool found_sus_path = false;
+#endif
+
 	if (dentry)
 		return dentry;
 
@@ -1647,6 +1660,9 @@ static struct dentry *__lookup_hash(const struct qstr *name,
 		return ERR_PTR(-ENOENT);
 
 	dentry = d_alloc(base, name);
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+retry:
+#endif
 	if (unlikely(!dentry))
 		return ERR_PTR(-ENOMEM);
 
@@ -1657,9 +1673,21 @@ static struct dentry *__lookup_hash(const struct qstr *name,
 	}
 
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-	if (!IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
-		dput(dentry);
-		return ERR_PTR(-ENOENT);
+	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(dentry->d_inode)) {
+		if (d_in_lookup(dentry))
+			d_lookup_done(dentry);
+		if (!(flags & LOOKUP_RCU))
+			dput(dentry);
+		// - Just in case if an user app has been granted full file access and
+		//   it is trying to find the fuse sus path with the create flag, then
+		//   at least we can prevent the fake qstr file from from being created,
+		//   although it is futile to do this, it is better than doing nothing.
+		if (dentry->d_inode->i_sb->s_magic == FUSE_SUPER_MAGIC &&
+			(flags & (LOOKUP_CREATE | LOOKUP_EXCL)))
+			return ERR_PTR(-EACCES);
+		dentry = d_alloc(base, &susfs_fake_qstr_name);
+		found_sus_path = true;
+		goto retry;
 	}
 #endif
 
@@ -1786,16 +1814,17 @@ static struct dentry *__lookup_slow(const struct qstr *name,
 	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	bool found_sus_path = false;
+	bool is_nd_flags_lookup_last = (flags & ND_FLAGS_LOOKUP_LAST);
 #endif
 
 	/* Don't go there if it's already dead */
 	if (unlikely(IS_DEADDIR(inode)))
 		return ERR_PTR(-ENOENT);
+again:
+	dentry = d_alloc_parallel(dir, name, &wq);
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 retry:
 #endif
-again:
-	dentry = d_alloc_parallel(dir, name, &wq);
 	if (IS_ERR(dentry))
 		return dentry;
 	if (unlikely(!d_in_lookup(dentry))) {
@@ -1805,6 +1834,12 @@ again:
 				if (!error) {
 					d_invalidate(dentry);
 					dput(dentry);
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+					if (found_sus_path) {
+						dentry = d_alloc_parallel(dir, &susfs_fake_qstr_name, &wq);
+						goto retry;
+					}
+#endif
 					goto again;
 				}
 				dput(dentry);
@@ -1820,12 +1855,14 @@ again:
 		}
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-	if (!IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(dentry->d_inode)) {
+	if (is_nd_flags_lookup_last && !found_sus_path && dentry && !IS_ERR(dentry) && dentry->d_inode &&
+		susfs_is_inode_sus_path(dentry->d_inode))
+	{
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
 		if (!(flags & LOOKUP_RCU))
 			dput(dentry);
-		dentry = d_alloc(dir, &susfs_fake_qstr_name);
+		dentry = d_alloc_parallel(dir, &susfs_fake_qstr_name, &wq);
 		found_sus_path = true;
 		goto retry;
 	}
