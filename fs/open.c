@@ -1273,18 +1273,14 @@ retry:
 
 long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 {
-	struct open_flags op;
-	int fd = build_open_flags(flags, mode, &op);
+	struct open_how how = build_open_how(flags, mode);
 
-	if (fd)
-		return fd;
-	return do_sys_openat2(dfd, filename, &op);
+	return do_sys_openat2(dfd, filename, &how);
 }
 
 SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
 {
-	struct open_how how = build_open_how(flags, mode);
-	return do_sys_openat2(dfd, filename, &how);
+	return do_sys_open(AT_FDCWD, filename, flags, mode);
 }
 
 

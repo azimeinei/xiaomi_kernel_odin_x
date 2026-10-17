@@ -7,7 +7,6 @@
 #include <linux/types.h>
 #include <linux/kref.h>
 #include <linux/wait.h>
-#include <linux/timer.h>
 
 #ifdef CONFIG_PSI
 
@@ -119,9 +118,6 @@ struct psi_trigger {
 	/* Wait queue for polling */
 	wait_queue_head_t event_wait;
 
-	/* Kernfs owns the waitqueue lifetime for cgroup pressure files. */
-	struct kernfs_open_file *of;
-
 	/* Pending event flag */
 	int event;
 
@@ -133,9 +129,6 @@ struct psi_trigger {
 	 * events to one per window
 	 */
 	u64 last_event_time;
-
-	/* Threshold breach deferred by the once-per-window rate limit. */
-	bool pending_event;
 };
 
 struct psi_group {
@@ -159,10 +152,8 @@ struct psi_group {
 
 	/* Monitor work control */
 	atomic_t poll_scheduled;
-	struct task_struct __rcu *poll_task;
-	struct timer_list poll_timer;
-	wait_queue_head_t poll_wait;
-	atomic_t poll_wakeup;
+	struct kthread_worker __rcu *poll_kworker;
+	struct kthread_delayed_work poll_work;
 
 	/* Protects data used by the monitor */
 	struct mutex trigger_lock;
