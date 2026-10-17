@@ -1948,6 +1948,17 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 			return COMPACT_PARTIAL_SKIPPED;
 	}
 
+	if (cc->proactive_compaction) {
+		unsigned int score, wmark_low;
+
+		if (kswapd_is_running(cc->zone->zone_pgdat))
+			return COMPACT_PARTIAL_SKIPPED;
+
+		score = fragmentation_score_zone(cc->zone);
+		wmark_low = fragmentation_score_wmark(true);
+		return score > wmark_low ? COMPACT_CONTINUE : COMPACT_SUCCESS;
+	}
+
 	if (is_via_compact_memory(cc->order))
 		return COMPACT_CONTINUE;
 
@@ -2483,6 +2494,31 @@ enum compact_result try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 }
 
 
+/* Compact a node toward the low proactive-fragmentation watermark. */
+static void proactive_compact_node(pg_data_t *pgdat)
+{
+	struct compact_control cc = {
+		.order = -1,
+		.mode = MIGRATE_SYNC_LIGHT,
+		.ignore_skip_hint = true,
+		.whole_zone = true,
+		.gfp_mask = GFP_KERNEL,
+		.proactive_compaction = true,
+	};
+	int zoneid;
+
+	for (zoneid = 0; zoneid < MAX_NR_ZONES; zoneid++) {
+		struct zone *zone = &pgdat->node_zones[zoneid];
+
+		if (!populated_zone(zone))
+			continue;
+		cc.zone = zone;
+		compact_zone(&cc, NULL);
+		VM_BUG_ON(!list_empty(&cc.freepages));
+		VM_BUG_ON(!list_empty(&cc.migratepages));
+	}
+}
+
 /* Compact all zones within a node */
 static void compact_node(int nid)
 {
@@ -2527,6 +2563,29 @@ static void compact_nodes(void)
 
 /* The written value is actually unused, all memory is compacted */
 int sysctl_compact_memory;
+
+/* Background compaction aggressiveness in the range [0, 100]. */
+int __read_mostly sysctl_compaction_proactiveness = 20;
+
+int compaction_proactiveness_sysctl_handler(struct ctl_table *table,
+		int write, void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int nid, ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (ret || !write || !READ_ONCE(sysctl_compaction_proactiveness))
+		return ret;
+
+	for_each_online_node(nid) {
+		pg_data_t *pgdat = NODE_DATA(nid);
+
+		if (READ_ONCE(pgdat->proactive_compact_trigger))
+			continue;
+		WRITE_ONCE(pgdat->proactive_compact_trigger, true);
+		wake_up_interruptible(&pgdat->kcompactd_wait);
+	}
+	return 0;
+}
 
 /*
  * This is the entry point for compacting all nodes via

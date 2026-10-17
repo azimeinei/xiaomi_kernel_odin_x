@@ -219,6 +219,7 @@ struct compact_control {
 	bool whole_zone;		/* Whole zone should/has been scanned */
 	bool contended;			/* Signal lock or sched contention */
 	bool rescan;			/* Rescanning the same pageblock */
+	bool proactive_compaction;	/* kcompactd proactive pass */
 };
 
 /*
