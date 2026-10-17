@@ -219,7 +219,6 @@ struct compact_control {
 	bool whole_zone;		/* Whole zone should/has been scanned */
 	bool contended;			/* Signal lock or sched contention */
 	bool rescan;			/* Rescanning the same pageblock */
-	bool proactive_compaction;	/* kcompactd proactive pass */
 };
 
 /*
@@ -313,8 +312,6 @@ void __vma_link_list(struct mm_struct *mm, struct vm_area_struct *vma,
 #ifdef CONFIG_MMU
 extern long populate_vma_page_range(struct vm_area_struct *vma,
 		unsigned long start, unsigned long end, int *nonblocking);
-extern long faultin_page_range(struct mm_struct *mm, unsigned long start,
-		unsigned long end, bool write, int *locked);
 extern void munlock_vma_pages_range(struct vm_area_struct *vma,
 			unsigned long start, unsigned long end);
 static inline void munlock_vma_pages_all(struct vm_area_struct *vma)
