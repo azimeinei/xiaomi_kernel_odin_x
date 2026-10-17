@@ -103,8 +103,9 @@ jobs:
           grep -qx 'CONFIG_NR_CPUS=8' out/.config
           grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
           grep -qx '# CONFIG_KSU is not set' out/.config
-          grep -qx '# CONFIG_KSU_SUSFS is not set' out/.config
-          grep -qx '# CONFIG_KSU_MANUAL_HOOK is not set' out/.config
+          # kconfig drops symbols whose dependencies are unmet, so assert absence
+          ! grep -q '^CONFIG_KSU' out/.config
+          ! grep -q '^CONFIG_KSU_' out/.config
           grep -qx 'CONFIG_ZRAM_KCOMPRESSD=y' out/.config
           grep -qx 'CONFIG_SCHED_WALT=y' out/.config
           grep -qx 'CONFIG_CPU_FREQ_GOV_WALT=y' out/.config
