@@ -2593,6 +2593,18 @@ static inline void mm_populate(unsigned long addr, unsigned long len)
 static inline void mm_populate(unsigned long addr, unsigned long len) {}
 #endif
 
+#ifdef CONFIG_MMU
+extern long faultin_page_range(struct mm_struct *mm, unsigned long start,
+				unsigned long end, bool write, int *locked);
+#else
+static inline long faultin_page_range(struct mm_struct *mm,
+		unsigned long start, unsigned long end, bool write,
+		int *locked)
+{
+	return -EINVAL;
+}
+#endif
+
 /* These take the mm semaphore themselves */
 extern int __must_check vm_brk(unsigned long, unsigned long);
 extern int __must_check vm_brk_flags(unsigned long, unsigned long, unsigned long);
