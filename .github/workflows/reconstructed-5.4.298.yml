@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - reconstructed-5.4.298-waltgov-test
+      - reconstructed-5.4.298-walt-a17
 
 permissions:
   contents: read
@@ -123,19 +123,19 @@ jobs:
           rm -f package/*.zip
           (
             cd package
-            zip -r9 ../odin-reconstructed-5.4.298-waltgov-test.zip .
+            zip -r9 ../odin-reconstructed-5.4.298-walt-a17.zip .
           )
-          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-waltgov-test.zip | tee SHA256SUMS
+          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-walt-a17.zip | tee SHA256SUMS
 
       - name: Upload candidate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: odin-reconstructed-5.4.298-waltgov-test
+          name: odin-reconstructed-5.4.298-walt-a17
           if-no-files-found: warn
           retention-days: 14
           path: |
-            odin-reconstructed-5.4.298-waltgov-test.zip
+            odin-reconstructed-5.4.298-walt-a17.zip
             out/arch/arm64/boot/Image
             out/.config
             kernelrelease.txt
