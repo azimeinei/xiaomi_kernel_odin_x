@@ -17,23 +17,16 @@
 #include <linux/syscalls.h>
 #include <linux/pagemap.h>
 #include <linux/compat.h>
-
-#include <linux/uaccess.h>
-#include <asm/unistd.h>
-
-struct mount;
+#if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MOUNT)
+#include <linux/susfs_def.h>
+#endif
 
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 extern void susfs_sus_kstat_spoof_generic_fillattr(struct inode *inode, struct kstat *stat);
 #endif
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-extern int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt);
-#endif
 
-#ifdef CONFIG_KSU_SUSFS
-extern struct static_key_true ksu_is_init_rc_hook_enabled;
-extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
-#endif
+#include <linux/uaccess.h>
+#include <asm/unistd.h>
 
 /**
  * generic_fillattr - Fill in the basic attributes from the inode struct
@@ -172,6 +165,8 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
 		error = vfs_getattr(&f.file->f_path, stat,
 				    request_mask, query_flags);
 #ifdef CONFIG_KSU_SUSFS
+		extern struct static_key_true ksu_is_init_rc_hook_enabled;
+		extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
 		if (!error && static_branch_unlikely(&ksu_is_init_rc_hook_enabled))
 			ksu_handle_vfs_fstat(fd, &stat->size);
 #endif
@@ -180,16 +175,6 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
 	return error;
 }
 EXPORT_SYMBOL(vfs_statx_fd);
-
-#ifdef CONFIG_KSU
-extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
-			   int *flags);
-#endif
-
-#ifdef CONFIG_KSU_MANUAL_HOOK
-extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
-extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);
-#endif
 
 /**
  * vfs_statx - Get basic and extra attributes by filename
@@ -207,15 +192,25 @@ extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **sta
  * 0 will be returned on success, and a -ve error code if unsuccessful.
  */
 
+#ifdef CONFIG_KSU
+extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
+			   int *flags);
+#endif
+
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
+extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);
+#endif
+
 int vfs_statx(int dfd, const char __user *filename, int flags,
 	      struct kstat *stat, u32 request_mask)
 {
 	struct path path;
 	int error = -EINVAL;
 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
-
+ 
 #ifdef CONFIG_KSU
-	ksu_handle_stat(&dfd, &filename, &flags);
+  ksu_handle_stat(&dfd, &filename, &flags);
 #endif
 
 	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |

@@ -23,11 +23,12 @@
 #include <linux/uaccess.h>
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #include <linux/susfs_def.h>
-extern int susfs_get_data_path(struct path *path);
-extern bool susfs_is_inode_sus_path(struct inode *inode);
 #endif
-
 #include <asm/unaligned.h>
+
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+#include <linux/susfs.h>
+#endif
 
 /*
  * Note the "unsafe_put_user() semantics: we goto a
@@ -41,6 +42,10 @@ extern bool susfs_is_inode_sus_path(struct inode *inode);
 	unsafe_copy_to_user(dst, src, len, label);		\
 } while (0)
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+extern bool susfs_is_inode_sus_path(struct inode *inode);
+extern int susfs_get_data_path(struct path *path);
+#endif
 
 int iterate_dir(struct file *file, struct dir_context *ctx)
 {
@@ -278,6 +283,19 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
 	struct inode *inode;
 #endif
 
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	inode = ilookup(buf->sb, ino);
+	if (!inode) {
+		goto orig_flow;
+	}
+	if (susfs_is_inode_sus_path(inode)) {
+		iput(inode);
+		return 0;
+	}
+	iput(inode);
+orig_flow:
+#endif
+
 	buf->error = verify_dirent_name(name, namlen);
 	if (unlikely(buf->error))
 		return buf->error;
@@ -292,18 +310,6 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
 	prev_reclen = buf->prev_reclen;
 	if (prev_reclen && signal_pending(current))
 		return -EINTR;
-#ifdef CONFIG_KSU_SUSFS_SUS_PATH
-	inode = ilookup(buf->sb, ino);
-	if (!inode) {
-		goto orig_flow;
-	}
-	if (susfs_is_inode_sus_path(inode)) {
-		iput(inode);
-		return 0;
-	}
-	iput(inode);
-orig_flow:
-#endif
 	dirent = buf->current_dir;
 	prev = (void __user *) dirent - prev_reclen;
 	if (!user_access_begin(prev, reclen + prev_reclen))
@@ -406,15 +412,6 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
 	struct inode *inode;
 #endif
 
-	buf->error = verify_dirent_name(name, namlen);
-	if (unlikely(buf->error))
-		return buf->error;
-	buf->error = -EINVAL;	/* only used if we fail.. */
-	if (reclen > buf->count)
-		return -EINVAL;
-	prev_reclen = buf->prev_reclen;
-	if (prev_reclen && signal_pending(current))
-		return -EINTR;
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	inode = ilookup(buf->sb, ino);
 	if (!inode) {
@@ -427,8 +424,17 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
 	iput(inode);
 orig_flow:
 #endif
-	dirent = buf->current_dir;
 
+	buf->error = verify_dirent_name(name, namlen);
+	if (unlikely(buf->error))
+		return buf->error;
+	buf->error = -EINVAL;	/* only used if we fail.. */
+	if (reclen > buf->count)
+		return -EINVAL;
+	prev_reclen = buf->prev_reclen;
+	if (prev_reclen && signal_pending(current))
+		return -EINTR;
+	dirent = buf->current_dir;
 	prev = (void __user *)dirent - prev_reclen;
 	if (!user_access_begin(prev, reclen + prev_reclen))
 		goto efault;
@@ -546,6 +552,7 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
 
 	if (buf->result)
 		return -EINVAL;
+
 	buf->result = verify_dirent_name(name, namlen);
 	if (buf->result < 0)
 		return buf->result;
@@ -635,10 +642,10 @@ struct compat_linux_dirent {
 struct compat_getdents_callback {
 	struct dir_context ctx;
 	struct compat_linux_dirent __user *current_dir;
+	struct compat_linux_dirent __user *previous;
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	struct super_block *sb;
 #endif
-	struct compat_linux_dirent __user *previous;
 	int count;
 	int error;
 };
@@ -659,18 +666,7 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)
 		return -EINVAL;
-	d_ino = ino;
-	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
-		buf->error = -EOVERFLOW;
-		return -EOVERFLOW;
-	}
-	dirent = buf->previous;
-	if (dirent) {
-		if (signal_pending(current))
-			return -EINTR;
-		if (__put_user(offset, &dirent->d_off))
-			goto efault;
-	}
+
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	inode = ilookup(buf->sb, ino);
 	if (!inode) {
@@ -683,6 +679,19 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
 	iput(inode);
 orig_flow:
 #endif
+
+	d_ino = ino;
+	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+		buf->error = -EOVERFLOW;
+		return -EOVERFLOW;
+	}
+	dirent = buf->previous;
+	if (dirent) {
+		if (signal_pending(current))
+			return -EINTR;
+		if (__put_user(offset, &dirent->d_off))
+			goto efault;
+	}
 	dirent = buf->current_dir;
 	if (__put_user(d_ino, &dirent->d_ino))
 		goto efault;
