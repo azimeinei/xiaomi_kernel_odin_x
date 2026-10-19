@@ -157,6 +157,20 @@ static inline bool cap_isclear(const kernel_cap_t a)
 }
 
 /*
+ * Check if "a" and "b" are identical.
+ * (mainline 5.8: needed by faccessat2's access_need_override_creds)
+ */
+static inline bool cap_isidentical(const kernel_cap_t a, const kernel_cap_t b)
+{
+	unsigned __capi;
+	CAP_FOR_EACH_U32(__capi) {
+		if (a.cap[__capi] != b.cap[__capi])
+			return false;
+	}
+	return true;
+}
+
+/*
  * Check if "a" is a subset of "set".
  * return true if ALL of the capabilities in "a" are also in "set"
  *	cap_issubset(0101, 1111) will return true

@@ -84,6 +84,8 @@
                                            unlinking file.  */
 #define AT_SYMLINK_FOLLOW	0x400   /* Follow symbolic links.  */
 #define AT_NO_AUTOMOUNT		0x800	/* Suppress terminal automount traversal */
+#define AT_EACCESS		0x200	/* Test access permitted for
+                                           effective IDs, for accessat2 only */
 #define AT_EMPTY_PATH		0x1000	/* Allow empty relative pathname */
 
 #define AT_STATX_SYNC_TYPE	0x6000	/* Type of synchronisation required from statx() */
