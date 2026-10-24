@@ -456,6 +456,8 @@ struct battery_chg_dev {
 	struct work_struct		fb_notifier_work;
 	struct work_struct		battery_check_work;
 	int				fake_soc;
+	int				chg_full_override;
+	int				chg_full_design_override;
 	bool				block_tx;
 	bool				ship_mode_en;
 	bool				debug_battery_detected;
@@ -1770,6 +1772,23 @@ static int battery_psy_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
 		pval->intval = bcdev->num_thermal_levels;
 		break;
+	/*
+	 * Runtime capacity overrides. 0 means "pass through whatever the
+	 * ADSP reports"; any positive value is reported instead. This only
+	 * changes what userspace reads, the SOC itself stays ADSP-owned.
+	 */
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		if (bcdev->chg_full_override > 0)
+			pval->intval = bcdev->chg_full_override;
+		else
+			pval->intval = pst->prop[prop_id];
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		if (bcdev->chg_full_design_override > 0)
+			pval->intval = bcdev->chg_full_design_override;
+		else
+			pval->intval = pst->prop[prop_id];
+		break;
 	default:
 		pval->intval = pst->prop[prop_id];
 		break;
@@ -2391,6 +2410,74 @@ static ssize_t fake_soc_show(struct class *c, struct class_attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", bcdev->fake_soc);
 }
 static CLASS_ATTR_RW(fake_soc);
+
+/*
+ * charge_full / charge_full_design override knobs.
+ *
+ * The fuel gauge lives in ADSP (BattMngrTech_BQG_R1), so the kernel cannot
+ * recompute capacity. These let userspace report a different number without
+ * a reboot: echo 6100000 > charge_full_override. Echo 0 restores pass-through.
+ */
+static ssize_t chg_full_override_store(struct class *c,
+				       struct class_attribute *attr,
+				       const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int val;
+
+	if (kstrtoint(buf, 0, &val))
+		return -EINVAL;
+	if (val < 0)
+		return -EINVAL;
+
+	bcdev->chg_full_override = val;
+	if (bcdev->psy_list[PSY_TYPE_BATTERY].psy)
+		power_supply_changed(bcdev->psy_list[PSY_TYPE_BATTERY].psy);
+
+	return count;
+}
+
+static ssize_t chg_full_override_show(struct class *c,
+				      struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", bcdev->chg_full_override);
+}
+static CLASS_ATTR_RW(chg_full_override);
+
+static ssize_t chg_full_design_override_store(struct class *c,
+					      struct class_attribute *attr,
+					      const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int val;
+
+	if (kstrtoint(buf, 0, &val))
+		return -EINVAL;
+	if (val < 0)
+		return -EINVAL;
+
+	bcdev->chg_full_design_override = val;
+	if (bcdev->psy_list[PSY_TYPE_BATTERY].psy)
+		power_supply_changed(bcdev->psy_list[PSY_TYPE_BATTERY].psy);
+
+	return count;
+}
+
+static ssize_t chg_full_design_override_show(struct class *c,
+					     struct class_attribute *attr,
+					     char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", bcdev->chg_full_design_override);
+}
+static CLASS_ATTR_RW(chg_full_design_override);
 
 static ssize_t wireless_boost_en_store(struct class *c,
 					struct class_attribute *attr,
@@ -5352,6 +5439,8 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_wireless_register.attr,
 	&class_attr_wireless_input_curr.attr,
 	&class_attr_fake_soc.attr,
+	&class_attr_chg_full_override.attr,
+	&class_attr_chg_full_design_override.attr,
 	&class_attr_wireless_fw_update.attr,
 	&class_attr_wireless_fw_force_update.attr,
 	&class_attr_wireless_fw_version.attr,
