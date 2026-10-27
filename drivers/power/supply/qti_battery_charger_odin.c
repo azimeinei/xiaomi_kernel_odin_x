@@ -957,6 +957,24 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 			ack_set = true;
 			bcdev->debug_battery_detected = !strcmp(pst->model,
 					MODEL_DEBUG_BOARD);
+			/*
+			 * Auto-scale reported capacity for 6100 mAh packs.
+			 * ADSP still charges with its own 4500-based profile;
+			 * this only changes what userspace reads, so apply it
+			 * once when the model string first arrives unless the
+			 * user has already set a manual override.
+			 */
+			if (strstr(pst->model, "6100") &&
+			    !bcdev->chg_full_override &&
+			    !bcdev->chg_full_design_override) {
+				bcdev->chg_full_override = 6100000;
+				bcdev->chg_full_design_override = 6100000;
+				pr_info("battery model %s: applying 6100 mAh capacity overrides\n",
+					pst->model);
+				if (bcdev->psy_list[PSY_TYPE_BATTERY].psy)
+					power_supply_changed(
+						bcdev->psy_list[PSY_TYPE_BATTERY].psy);
+			}
 			break;
 		}
 
