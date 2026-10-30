@@ -299,7 +299,7 @@ static void ksu_sys_enter_handler(void *data, struct pt_regs *regs, long id)
 					(const char __user **)&PT_REGS_PARM1(
 						regs);
 				if (current->pid != 1 &&
-				    is_init(get_current_cred())) {
+				    is_init(current_cred())) {
 					ksu_handle_init_mark_tracker(
 						filename_user);
 				} else {
