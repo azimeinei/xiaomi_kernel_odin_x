@@ -20,7 +20,7 @@ jobs:
       KBUILD_BUILD_HOST: "qq.com"
       KBUILD_BUILD_VERSION: "8"
       KBUILD_BUILD_TIMESTAMP: "Tue Aug 25 10:53:38 CST 2026"
-      EXPECTED_RELEASE: 5.4.298-11509ce9-g62792d2b61f7
+      EXPECTED_RELEASE: 5.4.281-g62792d2b61f7
 
     steps:
       - name: Free runner disk space
@@ -53,7 +53,7 @@ jobs:
 
       - name: Set SukiSU config
         run: |
-          sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION="-11509ce9"/' arch/arm64/configs/odin_defconfig
+          sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=""/' arch/arm64/configs/odin_defconfig
           cat >> arch/arm64/configs/odin_defconfig <<'EOF'
           CONFIG_KSU=y
           CONFIG_RKSU=y
@@ -70,7 +70,7 @@ jobs:
 
       - name: Verify reconstructed source
         run: |
-          test "$(sed -n 's/^SUBLEVEL = //p' Makefile)" = "298"
+          test "$(sed -n 's/^SUBLEVEL = //p' Makefile)" = "281"
           test "$(cat .scmversion)" = "-g62792d2b61f7"
           clang --version | tee clang-version.txt
           grep -q 'clang version 11.0.2' clang-version.txt
@@ -118,19 +118,19 @@ jobs:
           rm -f package/*.zip
           (
             cd package
-            zip -r9 ../odin-reconstructed-5.4.298-flyme-sukisu.zip .
+            zip -r9 ../odin-reconstructed-5.4.281-flyme-sukisu.zip .
           )
-          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.298-flyme-sukisu.zip | tee SHA256SUMS
+          sha256sum out/arch/arm64/boot/Image odin-reconstructed-5.4.281-flyme-sukisu.zip | tee SHA256SUMS
 
       - name: Upload candidate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: odin-reconstructed-5.4.298-flyme-sukisu
+          name: odin-reconstructed-5.4.281-flyme-sukisu
           if-no-files-found: warn
           retention-days: 14
           path: |
-            odin-reconstructed-5.4.298-flyme-sukisu.zip
+            odin-reconstructed-5.4.281-flyme-sukisu.zip
             out/arch/arm64/boot/Image
             out/.config
             kernelrelease.txt
