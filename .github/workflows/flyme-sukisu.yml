@@ -56,17 +56,16 @@ jobs:
           sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=""/' arch/arm64/configs/odin_defconfig
           cat >> arch/arm64/configs/odin_defconfig <<'EOF'
           CONFIG_KSU=y
-          CONFIG_RKSU=y
-          CONFIG_KSU_MANUAL_HOOK=y
+          CONFIG_KSU_MANUAL_SU=y
           # CONFIG_KPM is not set
           EOF
 
       - name: Select the SukiSU Ultra implementation
         run: |
           rm -rf drivers/kernelsu
-          cp -a scripts/tools/root/SukiSU-Ultra/kernelsu drivers/kernelsu
+          cp -a scripts/tools/root/SukiSU-Ultra-new/kernelsu drivers/kernelsu
           test -f drivers/kernelsu/Kconfig
-          grep -q '^config RKSU$' drivers/kernelsu/Kconfig
+          grep -q '^config KSU$' drivers/kernelsu/Kconfig
 
       - name: Verify reconstructed source
         run: |
@@ -90,8 +89,7 @@ jobs:
           make -s O=out ARCH=arm64 kernelrelease | tee kernelrelease.txt
           test "$(cat kernelrelease.txt)" = "$EXPECTED_RELEASE"
           grep -qx 'CONFIG_KSU=y' out/.config
-          grep -qx 'CONFIG_RKSU=y' out/.config
-          grep -qx 'CONFIG_KSU_MANUAL_HOOK=y' out/.config
+          grep -qx 'CONFIG_KSU_MANUAL_SU=y' out/.config
           grep -qx '# CONFIG_KPM is not set' out/.config
 
       - name: Build kernel
