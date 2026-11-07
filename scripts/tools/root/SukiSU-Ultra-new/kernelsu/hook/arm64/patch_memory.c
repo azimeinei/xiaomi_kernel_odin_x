@@ -38,12 +38,6 @@ unsigned long phys_from_virt(unsigned long addr, int *err)
     p4d = p4d_offset(pgd, addr);
     if (p4d_none(*p4d) || p4d_bad(*p4d))
         goto fail;
-#if defined(p4d_leaf)
-    if (p4d_leaf(*p4d)) {
-        return __p4d_to_phys(*p4d) + ((addr & ~P4D_MASK));
-    }
-#endif
-
     pud = pud_offset(p4d, addr);
     if (pud_none(*pud) || pud_bad(*pud))
         goto fail;
@@ -136,7 +130,7 @@ static int ksu_patch_text_nosync(void *dst, void *src, size_t len, int flags)
 
     void *map = set_fixmap_offset(FIX_TEXT_POKE0, phy);
 
-    ret = (int)copy_to_kernel_nofault(map, src, len);
+    ret = (int)probe_kernel_write(map, src, len);
 
     clear_fixmap(FIX_TEXT_POKE0);
 
