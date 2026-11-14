@@ -25,3 +25,4 @@ ksu_uapi.h
 .clangd
 out
 preinit/runner.elf
+!preinit/blob.S
