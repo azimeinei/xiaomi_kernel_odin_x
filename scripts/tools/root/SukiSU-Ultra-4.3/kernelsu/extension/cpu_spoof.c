@@ -173,8 +173,14 @@ static int set_spoof_cpu(const struct ksu_set_spoof_cpu_cmd *cmd)
                         (struct clocksource **)find_kernel_symbol_exact(
                             "curr_clocksource");
                     if (curr_cs_ptr && *curr_cs_ptr) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
                         (*curr_cs_ptr)->vdso_clock_mode =
                             VDSO_CLOCKMODE_ARCHTIMER;
+#else
+                        /* v5.11 moved clock_mode out of arch_clocksource_data */
+                        (*curr_cs_ptr)->archdata.clock_mode =
+                            VDSO_CLOCKMODE_ARCHTIMER;
+#endif
                     } else {
                         pr_warn("ksu: set_spoof_cpu failed to resolve 'curr_clocksource'\n");
                         ++missing;
