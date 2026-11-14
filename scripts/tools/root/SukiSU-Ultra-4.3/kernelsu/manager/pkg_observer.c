@@ -16,6 +16,18 @@
 #define TWA_RESUME true
 #endif
 
+// fsnotify passes the name as a qstr only since 5.2; before that it is a
+// raw byte string.
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0)
+typedef const struct qstr *ksu_fname_t;
+#define ksu_fname_len(f) ((f)->len)
+#define ksu_fname_arg(f) ((f)->name)
+#else
+typedef const unsigned char *ksu_fname_t;
+#define ksu_fname_len(f) (strlen(f))
+#define ksu_fname_arg(f) (f)
+#endif
+
 #define MASK_SYSTEM (FS_CREATE | FS_MOVE | FS_EVENT_ON_CHILD)
 
 struct watch_dir {
@@ -62,14 +74,24 @@ skipped:
     pr_warn("defer track_throne failed, skipping scan\n");
 }
 
-static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask, struct inode *inode, struct inode *dir,
-                                  const struct qstr *file_name, u32 cookie)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+#define KSU_DECL_FSNOTIFY_OPS(name)                                            \
+	int name(struct fsnotify_mark *mark, u32 mask, struct inode *inode,    \
+		 struct inode *dir, const struct qstr *file_name, u32 cookie)
+#else
+#define KSU_DECL_FSNOTIFY_OPS(name)                                            \
+	int name(struct fsnotify_group *group, struct inode *inode, u32 mask,  \
+		 const void *data, int data_type, ksu_fname_t file_name,       \
+		 u32 cookie, struct fsnotify_iter_info *iter_info)
+#endif
+
+static KSU_DECL_FSNOTIFY_OPS(ksu_handle_inode_event)
 {
-    if (!file_name)
+    if (!file_name || (mask & FS_ISDIR))
         return 0;
-    if (mask & FS_ISDIR)
-        return 0;
-    if (file_name->len == 13 && !memcmp(file_name->name, "packages.list", 13)) {
+
+    if (ksu_fname_len(file_name) == 13 &&
+        !memcmp(ksu_fname_arg(file_name), "packages.list", 13)) {
         pr_info("packages.list detected: %d\n", mask);
         ksu_defer_track_throne();
     }
@@ -77,7 +99,11 @@ static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask, struct i
 }
 
 static const struct fsnotify_ops ksu_ops = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
     .handle_inode_event = ksu_handle_inode_event,
+#else
+    .handle_event = ksu_handle_inode_event,
+#endif
 };
 
 static int add_mark_on_inode(struct inode *inode, u32 mask, struct fsnotify_mark **out)
