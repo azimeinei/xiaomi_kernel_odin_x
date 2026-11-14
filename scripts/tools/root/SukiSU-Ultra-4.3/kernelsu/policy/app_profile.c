@@ -103,10 +103,19 @@ static void disable_seccomp(void)
 
     current->seccomp.mode = 0;
     current->seccomp.filter = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
     atomic_set(&current->seccomp.filter_count, 0);
+#endif
     spin_unlock_irq(&current->sighand->siglock);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
+    /*
+     * 5.4 has no seccomp_filter_release() and no per-task filter_count;
+     * drop the reference the task used to hold on its filter the same way
+     * fork()/exit() do.
+     */
+    put_seccomp_filter(fake);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
     // https://github.com/torvalds/linux/commit/bfafe5efa9754ebc991750da0bcca2a6694f3ed3#diff-45eb79a57536d8eccfc1436932f093eb5c0b60d9361c39edb46581ad313e8987R576-R577
     fake->flags |= PF_EXITING;
 #elif NEED_BACKPORT_COMPAT
@@ -120,7 +129,9 @@ static void disable_seccomp(void)
     fake->sighand = NULL;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
     seccomp_filter_release(fake);
+#endif
     kfree(fake);
 }
 
