@@ -54,9 +54,9 @@ jobs:
       - name: Select the running SukiSU Ultra implementation
         run: |
           rm -rf drivers/kernelsu
-          cp -a scripts/tools/root/SukiSU-Ultra/kernelsu drivers/kernelsu
+          cp -a scripts/tools/root/SukiSU-Ultra-4.3/kernelsu drivers/kernelsu
           test -f drivers/kernelsu/Kconfig
-          grep -q '^config RKSU$' drivers/kernelsu/Kconfig
+          grep -q '^config KSU$' drivers/kernelsu/Kconfig
 
       - name: Verify reconstructed source
         run: |
@@ -91,7 +91,6 @@ jobs:
           grep -qx 'CONFIG_NR_CPUS=8' out/.config
           grep -qx 'CONFIG_BPF_STREAM_PARSER=y' out/.config
           grep -qx 'CONFIG_KSU=y' out/.config
-          grep -qx 'CONFIG_RKSU=y' out/.config
           grep -qx '# CONFIG_KPM is not set' out/.config
           grep -qx 'CONFIG_ZRAM_KCOMPRESSD=y' out/.config
           grep -qx 'CONFIG_SCHED_WALT=y' out/.config
