@@ -2,14 +2,19 @@
 #include <linux/compat.h>
 #include <linux/cred.h>
 #include <linux/gfp.h>
+#include <linux/version.h>
+/* minmax.h appeared in v5.8; earlier trees declare min()/max() in kernel.h. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
 #include <linux/minmax.h>
+#else
+#include <linux/kernel.h>
+#endif
 #include <linux/overflow.h>
 #include <linux/sched/signal.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 
-#include <linux/version.h>
 #if defined(__x86_64__) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
 #include <linux/mm.h>
 #endif
