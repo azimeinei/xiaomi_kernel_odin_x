@@ -22,6 +22,7 @@
 #include <linux/soc/qcom/battery_charger.h>
 #include <linux/fb.h>
 #include <linux/ktime.h>
+#include <linux/math64.h>
 #include <drm/mi_disp_notifier.h>
 #include <linux/thermal.h>
 #include <linux/hwid.h>
@@ -456,6 +457,9 @@ struct battery_chg_dev {
 	struct work_struct		fb_notifier_work;
 	struct work_struct		battery_check_work;
 	int				fake_soc;
+	int				soc_last;
+	bool				soc_valid;
+	ktime_t				soc_read_time;
 	int				chg_full_override;
 	int				chg_full_design_override;
 	bool				block_tx;
@@ -1729,6 +1733,7 @@ static int battery_psy_get_prop(struct power_supply *psy,
 {
 	struct battery_chg_dev *bcdev = power_supply_get_drvdata(psy);
 	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_BATTERY];
+	struct psy_state *qbg = &bcdev->psy_list[PSY_TYPE_XM];
 	int prop_id, rc;
 
 	pval->intval = -ENODATA;
@@ -1758,10 +1763,29 @@ static int battery_psy_get_prop(struct power_supply *psy,
 #else
 		pval->intval = DIV_ROUND_CLOSEST(pst->prop[prop_id], 100);
 #endif
-		/*if (IS_ENABLED(CONFIG_QTI_PMIC_GLINK_CLIENT_DEBUG) &&
-		   (bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100))
-			pval->intval = bcdev->fake_soc;*/
-		if(bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100)
+		if (ktime_to_ms(ktime_sub(ktime_get(),
+					bcdev->soc_read_time)) >= 2000) {
+			u32 rm, fcc;
+
+			rc = read_property_id(bcdev, qbg, XM_PROP_FG1_RM);
+			if (!rc)
+				rc = read_property_id(bcdev, qbg, XM_PROP_FG1_FCC);
+			rm = qbg->prop[XM_PROP_FG1_RM];
+			fcc = qbg->prop[XM_PROP_FG1_FCC];
+			if (!rc && fcc && rm <= fcc) {
+				int soc = div64_u64((u64)rm * 100, fcc);
+
+				if (bcdev->soc_valid && soc > bcdev->soc_last + 1)
+					soc = bcdev->soc_last +
+						(soc - bcdev->soc_last) / 4;
+				bcdev->soc_last = soc;
+				bcdev->soc_valid = true;
+			}
+			bcdev->soc_read_time = ktime_get();
+		}
+		if (bcdev->soc_valid)
+			pval->intval = bcdev->soc_last;
+		if (bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100)
 			pval->intval = bcdev->fake_soc;
 
 		/*only for test mode and uncharge state */
@@ -1789,6 +1813,15 @@ static int battery_psy_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
 		pval->intval = bcdev->num_thermal_levels;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
+		if (pval->intval == POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN &&
+		    bcdev->soc_valid)
+			pval->intval = bcdev->soc_last <= 1 ?
+				POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL :
+				bcdev->soc_last <= 15 ?
+				POWER_SUPPLY_CAPACITY_LEVEL_LOW :
+				POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 		break;
 	/*
 	 * Runtime capacity overrides. 0 means "pass through whatever the
@@ -5974,6 +6007,7 @@ static int battery_chg_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, bcdev);
 	sbcdev = bcdev;
 	bcdev->fake_soc = -EINVAL;
+	bcdev->soc_read_time = ktime_get();
 	rc = battery_chg_init_psy(bcdev);
 	if (rc < 0)
 		goto error;
