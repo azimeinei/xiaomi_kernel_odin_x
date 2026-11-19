@@ -1738,6 +1738,15 @@ static int battery_psy_get_prop(struct power_supply *psy,
 
 	pval->intval = -ENODATA;
 
+	if (bcdev->soc_valid && prop == POWER_SUPPLY_PROP_CAPACITY_LEVEL) {
+		pval->intval = bcdev->soc_last <= 1 ?
+			POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL :
+			bcdev->soc_last <= 15 ?
+			POWER_SUPPLY_CAPACITY_LEVEL_LOW :
+			POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+		return 0;
+	}
+
 	/*
 	 * The prop id of TIME_TO_FULL_NOW and TIME_TO_FULL_AVG is same.
 	 * So, map the prop id of TIME_TO_FULL_AVG for TIME_TO_FULL_NOW.
@@ -1816,15 +1825,6 @@ static int battery_psy_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
 		pval->intval = bcdev->num_thermal_levels;
-		break;
-	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		if (pval->intval == POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN &&
-		    bcdev->soc_valid)
-			pval->intval = bcdev->soc_last <= 1 ?
-				POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL :
-				bcdev->soc_last <= 15 ?
-				POWER_SUPPLY_CAPACITY_LEVEL_LOW :
-				POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 		break;
 	/*
 	 * Runtime capacity overrides. 0 means "pass through whatever the
