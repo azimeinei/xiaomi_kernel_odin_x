@@ -1775,7 +1775,10 @@ static int battery_psy_get_prop(struct power_supply *psy,
 			if (!rc && fcc && rm <= fcc) {
 				int soc = div64_u64((u64)rm * 100, fcc);
 
-				if (bcdev->soc_valid && soc > bcdev->soc_last + 1)
+				if (bcdev->soc_valid &&
+				    (soc > bcdev->soc_last + 1 ||
+				     (bcdev->soc_last <= 15 &&
+				      soc > bcdev->soc_last)))
 					soc = bcdev->soc_last +
 						(soc - bcdev->soc_last) / 4;
 				bcdev->soc_last = soc;
