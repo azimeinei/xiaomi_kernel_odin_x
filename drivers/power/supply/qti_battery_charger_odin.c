@@ -1736,9 +1736,35 @@ static int battery_psy_get_prop(struct power_supply *psy,
 	struct psy_state *qbg = &bcdev->psy_list[PSY_TYPE_XM];
 	int prop_id, rc;
 
-	pval->intval = -ENODATA;
+	if ((prop == POWER_SUPPLY_PROP_CAPACITY ||
+	     prop == POWER_SUPPLY_PROP_CAPACITY_LEVEL) &&
+	    ktime_to_ms(ktime_sub(ktime_get(),
+				  bcdev->soc_read_time)) >= 2000) {
+		u32 rm, fcc;
 
-	if (bcdev->soc_valid && prop == POWER_SUPPLY_PROP_CAPACITY_LEVEL) {
+		pval->intval = -ENODATA;
+		rc = read_property_id(bcdev, qbg, XM_PROP_FG1_RM);
+		if (!rc)
+			rc = read_property_id(bcdev, qbg, XM_PROP_FG1_FCC);
+		rm = qbg->prop[XM_PROP_FG1_RM];
+		fcc = qbg->prop[XM_PROP_FG1_FCC];
+		if (!rc && fcc && rm <= fcc) {
+			int soc = div64_u64((u64)rm * 100, fcc);
+
+			if (bcdev->soc_valid &&
+			    (soc > bcdev->soc_last + 1 ||
+			     (bcdev->soc_last <= 15 &&
+			      soc > bcdev->soc_last)))
+				soc = bcdev->soc_last +
+					(soc - bcdev->soc_last) / 4;
+			bcdev->soc_last = soc;
+			bcdev->soc_valid = true;
+		}
+		bcdev->soc_read_time = ktime_get();
+	}
+
+	if (prop == POWER_SUPPLY_PROP_CAPACITY_LEVEL &&
+	    bcdev->soc_valid) {
 		pval->intval = bcdev->soc_last <= 1 ?
 			POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL :
 			bcdev->soc_last <= 15 ?
@@ -1746,6 +1772,8 @@ static int battery_psy_get_prop(struct power_supply *psy,
 			POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 		return 0;
 	}
+
+	pval->intval = -ENODATA;
 
 	/*
 	 * The prop id of TIME_TO_FULL_NOW and TIME_TO_FULL_AVG is same.
@@ -1772,29 +1800,6 @@ static int battery_psy_get_prop(struct power_supply *psy,
 #else
 		pval->intval = DIV_ROUND_CLOSEST(pst->prop[prop_id], 100);
 #endif
-		if (ktime_to_ms(ktime_sub(ktime_get(),
-					bcdev->soc_read_time)) >= 2000) {
-			u32 rm, fcc;
-
-			rc = read_property_id(bcdev, qbg, XM_PROP_FG1_RM);
-			if (!rc)
-				rc = read_property_id(bcdev, qbg, XM_PROP_FG1_FCC);
-			rm = qbg->prop[XM_PROP_FG1_RM];
-			fcc = qbg->prop[XM_PROP_FG1_FCC];
-			if (!rc && fcc && rm <= fcc) {
-				int soc = div64_u64((u64)rm * 100, fcc);
-
-				if (bcdev->soc_valid &&
-				    (soc > bcdev->soc_last + 1 ||
-				     (bcdev->soc_last <= 15 &&
-				      soc > bcdev->soc_last)))
-					soc = bcdev->soc_last +
-						(soc - bcdev->soc_last) / 4;
-				bcdev->soc_last = soc;
-				bcdev->soc_valid = true;
-			}
-			bcdev->soc_read_time = ktime_get();
-		}
 		if (bcdev->soc_valid)
 			pval->intval = bcdev->soc_last;
 		if (bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100)
