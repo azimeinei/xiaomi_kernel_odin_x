@@ -1758,6 +1758,27 @@ static int battery_psy_get_prop(struct power_supply *psy,
 #else
 		pval->intval = DIV_ROUND_CLOSEST(pst->prop[prop_id], 100);
 #endif
+		/*
+		 * The ADSP-reported capacity can remain stale (frozen at a value
+		 * below 100 after charge termination) while the fuel-gauge
+		 * remaining/full-charge pair is still valid.  Read those
+		 * properties directly from the XM channel and use their ratio for
+		 * the user-visible SOC.  On a transient/invalid read, preserve the
+		 * normal ADSP value rather than reporting a bogus zero.
+		 */
+		{
+			struct psy_state *xm_pst = &bcdev->psy_list[PSY_TYPE_XM];
+			int rm_rc, fcc_rc;
+			u32 rm, fcc;
+
+			rm_rc = read_property_id(bcdev, xm_pst, XM_PROP_FG1_RM);
+			fcc_rc = read_property_id(bcdev, xm_pst, XM_PROP_FG1_FCC);
+			rm = xm_pst->prop[XM_PROP_FG1_RM];
+			fcc = xm_pst->prop[XM_PROP_FG1_FCC];
+			if (!rm_rc && !fcc_rc && fcc > 0 && rm <= fcc)
+				pval->intval = DIV_ROUND_CLOSEST(rm * 100, fcc);
+		}
+		pval->intval = clamp(pval->intval, 0, 100);
 		/*if (IS_ENABLED(CONFIG_QTI_PMIC_GLINK_CLIENT_DEBUG) &&
 		   (bcdev->fake_soc >= 0 && bcdev->fake_soc <= 100))
 			pval->intval = bcdev->fake_soc;*/
